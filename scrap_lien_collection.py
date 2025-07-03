@@ -64,6 +64,8 @@ def scrape_collection(url: str, output_txt: Path, css_selector: str = DEFAULT_SE
         page_num = 1
 
         logging.info("Ouverture de la collection : %s", url)
+        if not url.lower().startswith(("http://", "https://")):
+            raise ValueError("URL invalide : seul http(s) est autorise")
         driver.get(url)
         _random_sleep(2.0, 4.0)
 
