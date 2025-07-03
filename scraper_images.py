@@ -10,6 +10,7 @@ based on the cleaned product name.
 from __future__ import annotations
 
 import base64
+import binascii
 import os
 import re
 import time
@@ -62,7 +63,11 @@ def _download_binary(url: str, path: Path) -> None:
 
 
 def _save_base64(encoded: str, path: Path) -> None:
-    path.write_bytes(base64.b64decode(encoded))
+    try:
+        data = base64.b64decode(encoded)
+    except binascii.Error as exc:
+        raise RuntimeError("Invalid base64 image data") from exc
+    path.write_bytes(data)
 
 
 def _handle_image(element, folder: Path, index: int) -> bool:
