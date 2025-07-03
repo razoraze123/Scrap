@@ -1,0 +1,37 @@
+Audit de scraper_images.py
+==========================
+
+1. **Chargement de la page et navigation**
+   - Utilisation de `webdriver.Chrome` sans bloc `try/finally`. Si une erreur survient avant `driver.quit()`, le processus Chrome peut rester ouvert.
+   - Absence de contrôle du schéma de l'URL fournie (http, https, file://...). Cela pourrait ouvrir des fichiers locaux ou lancer du JavaScript malveillant.
+
+2. **Téléchargement des images**
+   - La fonction `_download_binary` ne gère pas les exceptions réseau (timeout, status > 400...).
+   - Aucun en-tête `User-Agent` n'est défini. Certains sites bloquent les requêtes anonymes.
+   - Les fichiers sont chargés entièrement en mémoire avant écriture : problématique pour de très gros fichiers.
+
+3. **Gestion des images en base64**
+   - `_save_base64` décode la chaîne sans vérifier sa validité. Une chaîne erronée lève une exception non capturée.
+   - Le nom de fichier généré pour les images en base64 est peu explicite et peut être écrasé si plusieurs images ont la même extension.
+
+4. **Détection du nom du produit**
+   - `_find_product_name` se base sur la balise `<h1>` uniquement. Certains thèmes WooCommerce utilisent d’autres sélecteurs.
+
+5. **Usage général**
+   - `time.sleep(2)` et `time.sleep(0.5)` sont utilisés pour attendre le chargement. Un `WebDriverWait` serait plus fiable.
+   - Les messages d’erreur sont affichés dans la console mais ne sont pas enregistrés (journalisation).
+
+Corrections recommandées
+------------------------
+
+1. Encadrer l’utilisation de `webdriver.Chrome` dans un bloc `try/finally` ou un contexte `with` pour garantir `driver.quit()`.
+2. Valider l’URL fournie pour n’autoriser que les schémas `http`/`https`.
+3. Améliorer `_download_binary` :
+   - Ajouter un en-tête `User-Agent`.
+   - Gérer les exceptions `requests.exceptions.RequestException`.
+   - Utiliser `stream=True` et écrire progressivement sur disque pour les gros fichiers.
+4. Sécuriser `_save_base64` en capturant les erreurs de décodage (`binascii.Error`).
+5. Remplacer les `time.sleep` par `WebDriverWait` de `selenium.webdriver.support.ui`.
+6. Ajouter une option de journalisation (par exemple via le module `logging`).
+
+Ces améliorations augmentent la robustesse et réduisent les risques liés à la navigation et au téléchargement d’images.
