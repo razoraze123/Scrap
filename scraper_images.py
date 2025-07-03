@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import logging
 import os
 import re
 import time
@@ -26,6 +27,9 @@ from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
 
 DEFAULT_CSS_SELECTOR = ".product-gallery__media-list img"
+
+
+logger = logging.getLogger(__name__)
 
 
 def _setup_driver() -> webdriver.Chrome:
@@ -116,7 +120,7 @@ def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
     skipped = 0
 
     try:
-        print("\U0001F30D Chargement de la page...")
+        logger.info("\U0001F30D Chargement de la page...")
         driver.get(url)
         time.sleep(2)
 
@@ -124,7 +128,7 @@ def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
         folder = _safe_folder(product_name)
 
         img_elements = driver.find_elements(By.CSS_SELECTOR, css_selector)
-        print(
+        logger.info(
             f"\n\U0001F5BC {len(img_elements)} images trouvées avec le sélecteur : {css_selector}\n"
         )
 
@@ -138,26 +142,28 @@ def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
                     skipped += 1
                 time.sleep(0.5)
             except Exception as exc:
-                print(f"\u274c Erreur pour l'image {idx} : {exc}")
+                logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
     finally:
         driver.quit()
 
-    print("\n" + "-" * 50)
-    print(f"\U0001F3AF Produit     : {product_name}")
-    print(f"\U0001F4E6 Dossier     : {folder}")
-    print(f"\u2705 Téléchargées : {downloaded}")
-    print(f"\u27A1️ Ignorées     : {skipped}")
-    print("-" * 50)
+    logger.info("\n" + "-" * 50)
+    logger.info("\U0001F3AF Produit     : %s", product_name)
+    logger.info("\U0001F4E6 Dossier     : %s", folder)
+    logger.info("\u2705 Téléchargées : %s", downloaded)
+    logger.info("\u27A1️ Ignorées     : %s", skipped)
+    logger.info("-" * 50)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     try:
         product_url = input("\U0001F517 Entrez l'URL du produit WooCommerce : ").strip()
-        selector = input(
-            f"\U0001F3AF Classe CSS des images [défaut: {DEFAULT_CSS_SELECTOR}] : "
-        ).strip() or DEFAULT_CSS_SELECTOR
+        selector = (
+            input(f"\U0001F3AF Classe CSS des images [défaut: {DEFAULT_CSS_SELECTOR}] : ").strip()
+            or DEFAULT_CSS_SELECTOR
+        )
         download_images(product_url, selector)
     except ValueError as exc:
-        print(f"Erreur : {exc}")
+        logger.error("Erreur : %s", exc)
     except KeyboardInterrupt:
-        print("\nInterruption par l'utilisateur.")
+        logger.info("\nInterruption par l'utilisateur.")
