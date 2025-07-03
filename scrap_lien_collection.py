@@ -59,41 +59,43 @@ def scrape_collection(url: str, output_txt: Path, css_selector: str = DEFAULT_SE
 
     driver = _setup_driver()
     results: list[dict[str, str]] = []
-    page_num = 1
 
-    logging.info("Ouverture de la collection : %s", url)
-    driver.get(url)
-    _random_sleep(2.0, 4.0)
+    try:
+        page_num = 1
 
-    while True:
-        logging.info("Traitement de la page %d", page_num)
+        logging.info("Ouverture de la collection : %s", url)
+        driver.get(url)
+        _random_sleep(2.0, 4.0)
 
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_all_elements_located((By.CSS_SELECTOR, css_selector))
-        )
-        elems = driver.find_elements(By.CSS_SELECTOR, css_selector)
+        while True:
+            logging.info("Traitement de la page %d", page_num)
 
-        for el in elems:
-            name = el.get_attribute("innerText").strip()
-            href = el.get_attribute("href") or el.get_attribute("data-href") or ""
-            full_url = href if href.startswith("http") else urljoin(url, href)
-            results.append({"name": name, "url": full_url})
-            logging.debug("\u2192 %s : %s", name, full_url)
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, css_selector))
+            )
+            elems = driver.find_elements(By.CSS_SELECTOR, css_selector)
 
-        try:
-            next_btn = driver.find_element(By.CSS_SELECTOR, 'a[rel="next"]')
-            next_href = next_btn.get_attribute("href")
-            if not next_href:
+            for el in elems:
+                name = el.get_attribute("innerText").strip()
+                href = el.get_attribute("href") or el.get_attribute("data-href") or ""
+                full_url = href if href.startswith("http") else urljoin(url, href)
+                results.append({"name": name, "url": full_url})
+                logging.debug("\u2192 %s : %s", name, full_url)
+
+            try:
+                next_btn = driver.find_element(By.CSS_SELECTOR, 'a[rel="next"]')
+                next_href = next_btn.get_attribute("href")
+                if not next_href:
+                    break
+                logging.info("\u2192 Page suivante detectee, navigation vers %s", next_href)
+                next_btn.click()
+                page_num += 1
+                _random_sleep(2.0, 4.0)
+            except Exception:
+                logging.info("\u2192 Pas de page suivante, fin de la pagination.")
                 break
-            logging.info("\u2192 Page suivante detectee, navigation vers %s", next_href)
-            next_btn.click()
-            page_num += 1
-            _random_sleep(2.0, 4.0)
-        except Exception:
-            logging.info("\u2192 Pas de page suivante, fin de la pagination.")
-            break
-
-    driver.quit()
+    finally:
+        driver.quit()
 
     output_txt.parent.mkdir(parents=True, exist_ok=True)
     with output_txt.open("w", encoding="utf-8-sig") as f:
