@@ -11,6 +11,9 @@ Un outil Python robuste et évolutif pour scraper automatiquement les images de 
 ✅ Création automatique de sous-dossiers par produit
 ✅ Progression affichée avec tqdm
 ✅ Résumé final clair dans la console
+✅ Extraction des noms et liens de produits d'une collection (scrap_lien_collection.py)
+Exemple : `python scrap_lien_collection.py https://exemple.com/collection`
+
 
 🛠️ Dépendances
 bash
