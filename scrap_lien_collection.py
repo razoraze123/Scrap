@@ -24,6 +24,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 # Default CSS selector used to locate product links in the collection page
 DEFAULT_SELECTOR = "div.product-card__info h3.product-card__title a"
+# Default CSS selector used to locate the "next page" button
+DEFAULT_NEXT_SELECTOR = "a[rel=\"next\"]"
 
 
 def _setup_driver() -> webdriver.Chrome:
@@ -54,8 +56,16 @@ def _random_sleep(min_s: float = 1.0, max_s: float = 2.5) -> None:
     time.sleep(random.uniform(min_s, max_s))
 
 
-def scrape_collection(url: str, output_txt: Path, css_selector: str = DEFAULT_SELECTOR) -> None:
-    """Scrape all products from *url* using *css_selector* and save them to *output_txt*."""
+def scrape_collection(
+    url: str,
+    output_txt: Path,
+    css_selector: str = DEFAULT_SELECTOR,
+    next_selector: str = DEFAULT_NEXT_SELECTOR,
+) -> None:
+    """Scrape all products from *url* using *css_selector* and save them to *output_txt*.
+
+    ``next_selector`` is used to detect the button leading to the next page.
+    """
 
     driver = _setup_driver()
     results: list[dict[str, str]] = []
@@ -85,7 +95,7 @@ def scrape_collection(url: str, output_txt: Path, css_selector: str = DEFAULT_SE
                 logging.debug("\u2192 %s : %s", name, full_url)
 
             try:
-                next_btn = driver.find_element(By.CSS_SELECTOR, 'a[rel="next"]')
+                next_btn = driver.find_element(By.CSS_SELECTOR, next_selector)
                 next_href = next_btn.get_attribute("href")
                 if not next_href:
                     break
@@ -130,6 +140,11 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Niveau de logging (defaut: %(default)s)",
     )
+    parser.add_argument(
+        "--next-selector",
+        default=DEFAULT_NEXT_SELECTOR,
+        help="Selecteur CSS du bouton 'page suivante' (defaut: %(default)s)",
+    )
     args = parser.parse_args()
 
     if not args.url:
@@ -146,8 +161,12 @@ def main() -> None:
     ).strip()
     css_selector = user_input or DEFAULT_SELECTOR
 
+    print(
+        f"\U0001F7E1 Selecteur CSS pour le bouton 'page suivante' : {args.next_selector}"
+    )
+
     try:
-        scrape_collection(args.url, Path(args.output), css_selector)
+        scrape_collection(args.url, Path(args.output), css_selector, args.next_selector)
     except Exception as exc:
         logging.error("Une erreur est survenue : %s", exc)
         exit(1)
