@@ -92,30 +92,37 @@ def _find_product_name(driver: webdriver.Chrome) -> str:
 def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
     driver = _setup_driver()
 
-    print("\U0001F30D Chargement de la page...")
-    driver.get(url)
-    time.sleep(2)
-
-    product_name = _find_product_name(driver)
-    folder = _safe_folder(product_name)
-
-    img_elements = driver.find_elements(By.CSS_SELECTOR, css_selector)
-    print(f"\n\U0001F5BC {len(img_elements)} images trouvées avec le sélecteur : {css_selector}\n")
-
+    product_name = ""
+    folder = Path()
     downloaded = 0
     skipped = 0
 
-    for idx, img in enumerate(tqdm(img_elements, desc="\U0001F53D Téléchargement des images"), start=1):
-        try:
-            if _handle_image(img, folder, idx):
-                downloaded += 1
-            else:
-                skipped += 1
-            time.sleep(0.5)
-        except Exception as exc:
-            print(f"\u274c Erreur pour l'image {idx} : {exc}")
+    try:
+        print("\U0001F30D Chargement de la page...")
+        driver.get(url)
+        time.sleep(2)
 
-    driver.quit()
+        product_name = _find_product_name(driver)
+        folder = _safe_folder(product_name)
+
+        img_elements = driver.find_elements(By.CSS_SELECTOR, css_selector)
+        print(
+            f"\n\U0001F5BC {len(img_elements)} images trouvées avec le sélecteur : {css_selector}\n"
+        )
+
+        for idx, img in enumerate(
+            tqdm(img_elements, desc="\U0001F53D Téléchargement des images"), start=1
+        ):
+            try:
+                if _handle_image(img, folder, idx):
+                    downloaded += 1
+                else:
+                    skipped += 1
+                time.sleep(0.5)
+            except Exception as exc:
+                print(f"\u274c Erreur pour l'image {idx} : {exc}")
+    finally:
+        driver.quit()
 
     print("\n" + "-" * 50)
     print(f"\U0001F3AF Produit     : {product_name}")
