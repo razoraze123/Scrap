@@ -17,3 +17,6 @@ bash
 Copier
 Modifier
 pip install selenium webdriver-manager tqdm requests
+
+🗒️ Suivi des audits
+Les rapports d'audit sont enregistrés dans `compte_rendu.txt`. Mettez ce fichier à jour à chaque nouvel audit. Pour consulter les derniers résultats, ouvrez `compte_rendu.txt` ou exécutez `cat compte_rendu.txt` dans votre terminal.
