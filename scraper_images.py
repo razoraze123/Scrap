@@ -13,7 +13,6 @@ import base64
 import binascii
 import os
 import re
-import time
 from pathlib import Path
 from typing import Iterable
 
@@ -22,6 +21,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -118,7 +119,9 @@ def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
     try:
         print("\U0001F30D Chargement de la page...")
         driver.get(url)
-        time.sleep(2)
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, css_selector))
+        )
 
         product_name = _find_product_name(driver)
         folder = _safe_folder(product_name)
@@ -136,7 +139,7 @@ def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
                     downloaded += 1
                 else:
                     skipped += 1
-                time.sleep(0.5)
+                WebDriverWait(driver, 5).until(lambda d: img.get_attribute("src"))
             except Exception as exc:
                 print(f"\u274c Erreur pour l'image {idx} : {exc}")
     finally:
