@@ -100,9 +100,13 @@ def scrape_collection(
                 if not next_href:
                     break
                 logging.info("\u2192 Page suivante detectee, navigation vers %s", next_href)
+                current_url = driver.current_url
                 next_btn.click()
+                WebDriverWait(driver, 10).until(
+                    lambda d: d.current_url != current_url
+                    or EC.staleness_of(next_btn)(d)
+                )
                 page_num += 1
-                _random_sleep(2.0, 4.0)
             except Exception:
                 logging.info("\u2192 Pas de page suivante, fin de la pagination.")
                 break
