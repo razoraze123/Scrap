@@ -90,6 +90,9 @@ def _find_product_name(driver: webdriver.Chrome) -> str:
 
 
 def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
+
     driver = _setup_driver()
 
     product_name = ""
@@ -139,5 +142,7 @@ if __name__ == "__main__":
             f"\U0001F3AF Classe CSS des images [défaut: {DEFAULT_CSS_SELECTOR}] : "
         ).strip() or DEFAULT_CSS_SELECTOR
         download_images(product_url, selector)
+    except ValueError as exc:
+        print(f"Erreur : {exc}")
     except KeyboardInterrupt:
         print("\nInterruption par l'utilisateur.")
