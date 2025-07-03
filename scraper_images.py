@@ -44,11 +44,21 @@ def _safe_folder(product_name: str) -> Path:
     return folder
 
 
+USER_AGENT = "ScrapImageBot/1.0"
+
+
 def _download_binary(url: str, path: Path) -> None:
     """Download binary content from *url* into *path*."""
-    response = requests.get(url, timeout=10)
-    response.raise_for_status()
-    path.write_bytes(response.content)
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        with requests.get(url, headers=headers, stream=True, timeout=10) as resp:
+            resp.raise_for_status()
+            with path.open("wb") as fh:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        fh.write(chunk)
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"Failed to download {url}") from exc
 
 
 def _save_base64(encoded: str, path: Path) -> None:
