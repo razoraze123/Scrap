@@ -145,6 +145,12 @@ def main() -> None:
         help="Niveau de logging (defaut: %(default)s)",
     )
     parser.add_argument(
+        "-s",
+        "--selector",
+        default=DEFAULT_SELECTOR,
+        help="Selecteur CSS des liens produits (defaut: %(default)s)",
+    )
+    parser.add_argument(
         "--next-selector",
         default=DEFAULT_NEXT_SELECTOR,
         help="Selecteur CSS du bouton 'page suivante' (defaut: %(default)s)",
@@ -159,12 +165,8 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
-    print(f"\U0001F7E1 Selecteur CSS par defaut : {DEFAULT_SELECTOR}")
-    user_input = input(
-        "Souhaitez-vous utiliser un autre selecteur CSS ? (laisser vide pour garder le defaut) : "
-    ).strip()
-    css_selector = user_input or DEFAULT_SELECTOR
-
+    css_selector = args.selector
+    print(f"\U0001F7E1 Selecteur CSS utilise : {css_selector}")
     print(
         f"\U0001F7E1 Selecteur CSS pour le bouton 'page suivante' : {args.next_selector}"
     )

@@ -7,12 +7,12 @@ Un outil Python robuste et évolutif pour scraper automatiquement les images de 
 ✅ Téléchargement des images depuis une page produit
 ✅ Détection des images base64 intégrées (et sauvegarde locale)
 ✅ Nettoyage automatique des noms de produits / fichiers
-✅ Sélecteur CSS personnalisable via la console
+✅ Sélecteur CSS personnalisable via l'option `--selector`
 ✅ Création automatique de sous-dossiers par produit
 ✅ Progression affichée avec tqdm
 ✅ Résumé final clair dans la console
 ✅ Extraction des noms et liens de produits d'une collection (scrap_lien_collection.py)
-Exemple : `python scrap_lien_collection.py https://exemple.com/collection`
+Exemple : `python scrap_lien_collection.py https://exemple.com/collection --selector "div.product a"`
 
 
 🛠️ Dépendances
