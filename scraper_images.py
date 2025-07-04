@@ -15,7 +15,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Callable, Optional
 
 import requests
 from selenium import webdriver
@@ -42,10 +42,10 @@ def _setup_driver() -> webdriver.Chrome:
     return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 
-def _safe_folder(product_name: str) -> Path:
+def _safe_folder(product_name: str, base_dir: Path | str = "images") -> Path:
     """Return a Path object for the folder where images will be saved."""
     safe_name = re.sub(r"[^\w\-]", "_", product_name)
-    folder = Path("images") / safe_name
+    folder = Path(base_dir) / safe_name
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
@@ -109,7 +109,12 @@ def _find_product_name(driver: webdriver.Chrome) -> str:
         return "produit_woo"
 
 
-def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
+def download_images(
+    url: str,
+    css_selector: str = DEFAULT_CSS_SELECTOR,
+    dest_dir: Path | str = "images",
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> None:
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
 
@@ -128,13 +133,14 @@ def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
         )
 
         product_name = _find_product_name(driver)
-        folder = _safe_folder(product_name)
+        folder = _safe_folder(product_name, dest_dir)
 
         img_elements = driver.find_elements(By.CSS_SELECTOR, css_selector)
         logger.info(
             f"\n\U0001F5BC {len(img_elements)} images trouvées avec le sélecteur : {css_selector}\n"
         )
 
+        total = len(img_elements)
         for idx, img in enumerate(
             tqdm(img_elements, desc="\U0001F53D Téléchargement des images"), start=1
         ):
@@ -144,6 +150,8 @@ def download_images(url: str, css_selector: str = DEFAULT_CSS_SELECTOR) -> None:
                 else:
                     skipped += 1
                 WebDriverWait(driver, 5).until(lambda d: img.get_attribute("src"))
+                if progress_callback:
+                    progress_callback(idx, total)
             except Exception as exc:
                 logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
     finally:
@@ -162,10 +170,13 @@ if __name__ == "__main__":
     try:
         product_url = input("\U0001F517 Entrez l'URL du produit WooCommerce : ").strip()
         selector = (
-            input(f"\U0001F3AF Classe CSS des images [défaut: {DEFAULT_CSS_SELECTOR}] : ").strip()
+            input(
+                f"\U0001F3AF Classe CSS des images [défaut: {DEFAULT_CSS_SELECTOR}] : "
+            ).strip()
             or DEFAULT_CSS_SELECTOR
         )
-        download_images(product_url, selector)
+        dest = input("\U0001F4C2 Dossier de destination [defaut: images] : ").strip() or "images"
+        download_images(product_url, selector, dest)
     except ValueError as exc:
         logger.error("Erreur : %s", exc)
     except KeyboardInterrupt:
