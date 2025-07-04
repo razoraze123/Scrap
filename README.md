@@ -14,6 +14,19 @@ Un outil Python robuste et évolutif pour scraper automatiquement les images de 
 ✅ Extraction des noms et liens de produits d'une collection (scrap_lien_collection.py)
 Exemple : `python scrap_lien_collection.py https://exemple.com/collection --selector "div.product a"`
 
+Pour tester ou générer rapidement un sélecteur CSS depuis un extrait HTML,
+utilisez `find_css_selector.py`. En ligne de commande :
+
+```
+python find_css_selector.py page.html
+```
+
+Ou lancez l'interface graphique (PySide6 requis) avec :
+
+```
+python find_css_selector.py --gui
+```
+
 
 🛠️ Dépendances
 bash

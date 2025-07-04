@@ -8,6 +8,20 @@ from typing import Iterable
 
 from bs4 import BeautifulSoup
 
+try:
+    from PySide6.QtWidgets import (
+        QApplication,
+        QMainWindow,
+        QWidget,
+        QVBoxLayout,
+        QLabel,
+        QPlainTextEdit,
+        QLineEdit,
+        QPushButton,
+    )
+except Exception:  # noqa: BLE001
+    QApplication = None  # type: ignore
+
 # Patterns of classes considered too generic or dynamic to use in a selector
 _BLACKLIST_PATTERNS = [
     re.compile(pattern)
@@ -65,18 +79,82 @@ def find_best_css_selector(html: str) -> str:
     return sorted(candidates, key=len)[0]
 
 
+def run_gui() -> None:
+    """Launch the PySide6 interface to test selectors."""
+
+    if QApplication is None:
+        raise RuntimeError("PySide6 is not installed")
+
+    class MainWindow(QMainWindow):
+        def __init__(self) -> None:
+            super().__init__()
+            self.setWindowTitle("CSS Selector Tester")
+
+            container = QWidget()
+            layout = QVBoxLayout(container)
+            self.setCentralWidget(container)
+
+            layout.addWidget(QLabel("HTML input"))
+            self.input_html = QPlainTextEdit()
+            self.input_html.setPlaceholderText("Paste HTML snippet here...")
+            layout.addWidget(self.input_html)
+
+            self.button = QPushButton("Find selector")
+            layout.addWidget(self.button)
+
+            layout.addWidget(QLabel("Best selector"))
+            self.output = QLineEdit()
+            self.output.setReadOnly(True)
+            layout.addWidget(self.output)
+
+            self.status = QLabel()
+            layout.addWidget(self.status)
+
+            self.button.clicked.connect(self.on_click)
+
+        def on_click(self) -> None:
+            html = self.input_html.toPlainText().strip()
+            if not html:
+                self.status.setText("Please provide HTML")
+                self.output.clear()
+                return
+            try:
+                selector = find_best_css_selector(html)
+            except Exception as exc:  # noqa: BLE001
+                self.status.setText(str(exc))
+                self.output.clear()
+            else:
+                self.output.setText(selector)
+                self.status.setText("")
+
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.resize(600, 400)
+    window.show()
+    sys.exit(app.exec())
+
+
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(
-        description="Generate a CSS selector for product links from HTML input"
+        description="Generate a CSS selector for product links from HTML input",
     )
     parser.add_argument("file", nargs="?", help="Path to an HTML file")
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Launch the graphical interface instead of reading a file",
+    )
     args = parser.parse_args()
 
-    if args.file:
-        with open(args.file, "r", encoding="utf-8") as fh:
-            content = fh.read()
+    if args.gui:
+        run_gui()
     else:
-        content = sys.stdin.read()
-    print(find_best_css_selector(content))
+        if args.file:
+            with open(args.file, "r", encoding="utf-8") as fh:
+                content = fh.read()
+        else:
+            content = sys.stdin.read()
+        print(find_best_css_selector(content))
 
