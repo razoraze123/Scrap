@@ -16,6 +16,7 @@ import os
 import re
 from pathlib import Path
 from typing import Iterable, Callable, Optional
+import argparse
 
 import requests
 from selenium import webdriver
@@ -53,9 +54,9 @@ def _safe_folder(product_name: str, base_dir: Path | str = "images") -> Path:
 USER_AGENT = "ScrapImageBot/1.0"
 
 
-def _download_binary(url: str, path: Path) -> None:
-    """Download binary content from *url* into *path*."""
-    headers = {"User-Agent": USER_AGENT}
+def _download_binary(url: str, path: Path, user_agent: str = USER_AGENT) -> None:
+    """Download binary content from *url* into *path* using *user_agent*."""
+    headers = {"User-Agent": user_agent}
     try:
         with requests.get(url, headers=headers, stream=True, timeout=10) as resp:
             resp.raise_for_status()
@@ -75,7 +76,7 @@ def _save_base64(encoded: str, path: Path) -> None:
     path.write_bytes(data)
 
 
-def _handle_image(element, folder: Path, index: int) -> bool:
+def _handle_image(element, folder: Path, index: int, user_agent: str) -> bool:
     src = element.get_attribute("src")
     if not src:
         return False
@@ -97,7 +98,7 @@ def _handle_image(element, folder: Path, index: int) -> bool:
     target = folder / filename
     if target.exists():
         return False
-    _download_binary(src, target)
+    _download_binary(src, target, user_agent)
     return True
 
 
@@ -138,6 +139,7 @@ def download_images(
     css_selector: str = DEFAULT_CSS_SELECTOR,
     dest_dir: Path | str = "images",
     progress_callback: Optional[Callable[[int, int], None]] = None,
+    user_agent: str = USER_AGENT,
 ) -> None:
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
@@ -169,7 +171,7 @@ def download_images(
             tqdm(img_elements, desc="\U0001F53D Téléchargement des images"), start=1
         ):
             try:
-                if _handle_image(img, folder, idx):
+                if _handle_image(img, folder, idx, user_agent):
                     downloaded += 1
                 else:
                     skipped += 1
@@ -189,19 +191,61 @@ def download_images(
     logger.info("-" * 50)
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Télécharger toutes les images d'un produit WooCommerce."
+    )
+    parser.add_argument(
+        "url",
+        nargs="?",
+        help="URL du produit (si absent, demande à l'exécution)",
+    )
+    parser.add_argument(
+        "-s",
+        "--selector",
+        default=DEFAULT_CSS_SELECTOR,
+        help="Sélecteur CSS des images (defaut: %(default)s)",
+    )
+    parser.add_argument(
+        "-d",
+        "--dest",
+        default="images",
+        help="Dossier de destination (defaut: %(default)s)",
+    )
+    parser.add_argument(
+        "--user-agent",
+        default=USER_AGENT,
+        help="User-Agent à utiliser pour les requêtes (defaut: %(default)s)",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Niveau de logging (defaut: %(default)s)",
+    )
+    args = parser.parse_args()
+
+    if not args.url:
+        args.url = input("\U0001F517 Entrez l'URL du produit WooCommerce : ").strip()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(levelname)s: %(message)s",
+    )
+
     try:
-        product_url = input("\U0001F517 Entrez l'URL du produit WooCommerce : ").strip()
-        selector = (
-            input(
-                f"\U0001F3AF Classe CSS des images [défaut: {DEFAULT_CSS_SELECTOR}] : "
-            ).strip()
-            or DEFAULT_CSS_SELECTOR
+        download_images(
+            args.url,
+            css_selector=args.selector,
+            dest_dir=args.dest,
+            user_agent=args.user_agent,
         )
-        dest = input("\U0001F4C2 Dossier de destination [defaut: images] : ").strip() or "images"
-        download_images(product_url, selector, dest)
     except ValueError as exc:
         logger.error("Erreur : %s", exc)
+
+
+if __name__ == "__main__":
+    try:
+        main()
     except KeyboardInterrupt:
         logger.info("\nInterruption par l'utilisateur.")
