@@ -29,10 +29,12 @@ python find_css_selector.py --gui
 
 
 🛠️ Dépendances
-bash
-Copier
-Modifier
-pip install selenium webdriver-manager tqdm requests
+
+Installez les bibliothèques nécessaires avec :
+
+```bash
+pip install -r requirements.txt
+```
 
 🗒️ Suivi des audits
 Les rapports d'audit sont enregistrés dans `compte_rendu.txt`. Mettez ce fichier à jour à chaque nouvel audit. Pour consulter les derniers résultats, ouvrez `compte_rendu.txt` ou exécutez `cat compte_rendu.txt` dans votre terminal.

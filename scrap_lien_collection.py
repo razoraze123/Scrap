@@ -7,6 +7,8 @@ and stores each product name and link into a UTF-8 encoded text file.
 
 from __future__ import annotations
 
+import sys
+
 import argparse
 import logging
 import random
@@ -175,7 +177,7 @@ def main() -> None:
         scrape_collection(args.url, Path(args.output), css_selector, args.next_selector)
     except Exception as exc:
         logging.error("Une erreur est survenue : %s", exc)
-        exit(1)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
