@@ -12,3 +12,13 @@ Audit de scraper_images.py
 6. Journalisation configurable via le module `logging`.
 
 Ces améliorations renforcent la fiabilité et la sécurité lors du scraping d'images.
+
+Audit de scrap_description_produit.py
+====================================
+
+Le module extrait la description HTML d'une page produit.
+
+1. WebDriver headless configuré avec masquage de l'automatisation.
+2. Utilisation de `WebDriverWait` pour attendre la présence de l'élément ciblé.
+3. Validation de l'URL en `http` ou `https`.
+4. Sauvegarde UTF-8 de la description dans un fichier fourni.
