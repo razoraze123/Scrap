@@ -102,11 +102,35 @@ def _handle_image(element, folder: Path, index: int) -> bool:
 
 
 def _find_product_name(driver: webdriver.Chrome) -> str:
-    try:
-        elem = driver.find_element(By.TAG_NAME, "h1")
-        return elem.text.strip() or "produit_woo"
-    except Exception:
-        return "produit_woo"
+    """Return the product name found in the page.
+
+    The function checks, in order, for a ``<meta property="og:title">`` tag,
+    the page ``<title>`` element and finally the first ``<h1>`` element. If none
+    of these elements provide a non-empty value, ``"produit_woo"`` is returned.
+    """
+
+    selectors = [
+        (By.CSS_SELECTOR, "meta[property='og:title']", "content"),
+        (By.TAG_NAME, "title", None),
+        (By.TAG_NAME, "h1", None),
+    ]
+
+    for by, value, attr in selectors:
+        try:
+            elem = driver.find_element(by, value)
+            text = (
+                elem.get_attribute(attr)
+                if attr
+                else getattr(elem, "text", "")
+            )
+            if text:
+                text = text.strip()
+            if text:
+                return text
+        except Exception:
+            continue
+
+    return "produit_woo"
 
 
 def download_images(
