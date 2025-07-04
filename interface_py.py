@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal
 
 import scrap_lien_collection
+import scraper_images
 
 
 class QtLogHandler(logging.Handler):
@@ -66,6 +67,40 @@ class ScrapLienWorker(QThread):
         finally:
             logger.removeHandler(handler)
             logger.removeHandler(stream_handler)
+            self.finished.emit()
+
+
+class ScraperImagesWorker(QThread):
+    """Background worker to download images using scraper_images."""
+
+    log = Signal(str)
+    progress = Signal(int)
+    finished = Signal()
+
+    def __init__(self, url: str, dest: Path, selector: str):
+        super().__init__()
+        self.url = url
+        self.dest = dest
+        self.selector = selector
+
+    def run(self) -> None:
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+        handler = QtLogHandler(self.log)
+        formatter = logging.Formatter("%(levelname)s: %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        try:
+            scraper_images.download_images(
+                self.url,
+                css_selector=self.selector,
+                dest_dir=self.dest,
+                progress_callback=lambda i, t: self.progress.emit(int(i / t * 100)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("%s", exc)
+        finally:
+            logger.removeHandler(handler)
             self.finished.emit()
 
 
@@ -141,15 +176,46 @@ class PageScraperImages(QWidget):
         layout.addWidget(self.input_dest)
 
         self.input_options = QLineEdit()
-        layout.addWidget(QLabel("Options"))
+        layout.addWidget(QLabel("Sélecteur CSS"))
         layout.addWidget(self.input_options)
 
         self.button_start = QPushButton("Scraper")
         layout.addWidget(self.button_start)
 
         self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
         layout.addWidget(self.progress)
+
+        self.log_view = QPlainTextEdit()
+        self.log_view.setReadOnly(True)
+        layout.addWidget(self.log_view)
         layout.addStretch()
+
+        self.worker: ScraperImagesWorker | None = None
+
+        self.button_start.clicked.connect(self.start_worker)
+
+    def start_worker(self) -> None:
+        url = self.input_source.text().strip()
+        dest = Path(self.input_dest.text().strip() or "images")
+        selector = self.input_options.text().strip() or scraper_images.DEFAULT_CSS_SELECTOR
+
+        if not url:
+            self.log_view.appendPlainText("Veuillez renseigner l'URL.")
+            return
+
+        self.button_start.setEnabled(False)
+        self.progress.setValue(0)
+        self.log_view.clear()
+
+        self.worker = ScraperImagesWorker(url, dest, selector)
+        self.worker.log.connect(self.log_view.appendPlainText)
+        self.worker.progress.connect(self.progress.setValue)
+        self.worker.finished.connect(self.on_finished)
+        self.worker.start()
+
+    def on_finished(self) -> None:
+        self.button_start.setEnabled(True)
 
 
 class MainWindow(QMainWindow):
