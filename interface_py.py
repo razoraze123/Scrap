@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QProgressBar,
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QThread, Signal
 
 import scrap_lien_collection
 import scraper_images
