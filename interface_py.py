@@ -245,6 +245,28 @@ class PageScraperImages(QWidget):
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
+        self.progress.setStyleSheet(
+            """
+            QProgressBar {
+                border: 2px solid #555;
+                border-radius: 5px;
+                text-align: center;
+                font-weight: bold;
+                height: 20px;
+                background-color: #f0f0f0;
+            }
+
+            QProgressBar::chunk {
+                background: qlineargradient(
+                    x1: 0, y1: 0, x2: 1, y2: 0,
+                    stop: 0 #00c6ff,
+                    stop: 1 #0072ff
+                );
+                border-radius: 5px;
+                margin: 1px;
+            }
+            """
+        )
         layout.addWidget(self.progress)
 
         self.log_view = QPlainTextEdit()
