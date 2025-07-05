@@ -56,12 +56,13 @@ class ToggleSwitch(QCheckBox):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setChecked(False)
-        self.setCursor(Qt.PointingHandCursor)
         self._offset = 2
         self._anim = QPropertyAnimation(self, b"offset", self)
         self._anim.setDuration(120)
+        self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(40, 20)
+        QCheckBox.setChecked(self, False)
+        self.setStyleSheet("QCheckBox::indicator { width:0; height:0; }")
 
     def offset(self) -> int:  # type: ignore[override]
         return self._offset
@@ -163,18 +164,16 @@ class ScraperImagesWorker(QThread):
 
             preview_sent = False
             for idx, url in enumerate(self.urls):
-                folder = scraper_images.download_images(
+                info = scraper_images.download_images(
                     url,
                     css_selector=self.selector,
                     parent_dir=self.parent_dir,
                     progress_callback=make_cb(idx),
                 )
-                if self.show_preview and not preview_sent:
-                    for item in folder.iterdir():
-                        if item.is_file():
-                            self.preview_path.emit(str(item))
-                            preview_sent = True
-                            break
+                folder = info["folder"]
+                if self.show_preview and not preview_sent and info.get("first_image"):
+                    self.preview_path.emit(str(info["first_image"]))
+                    preview_sent = True
                 if self.open_folder:
                     scraper_images._open_folder(folder)
         except Exception as exc:  # noqa: BLE001
@@ -337,15 +336,10 @@ class PageScraperImages(QWidget):
         self.progress.setRange(0, 100)
         layout.addWidget(self.progress)
 
-        self.preview_label = QLabel(alignment=Qt.AlignCenter)
-        self.preview_text = QTextEdit()
-        self.preview_text.setReadOnly(True)
-        self.preview_stack = QStackedWidget()
-        self.preview_stack.addWidget(self.preview_label)
-        self.preview_stack.addWidget(self.preview_text)
-        self.preview_stack.setVisible(False)
-        self.switch_preview.toggled.connect(self.preview_stack.setVisible)
-        layout.addWidget(self.preview_stack)
+        self.label_preview = QLabel(alignment=Qt.AlignCenter)
+        self.label_preview.setVisible(False)
+        self.switch_preview.toggled.connect(self.label_preview.setVisible)
+        layout.addWidget(self.label_preview)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
@@ -399,7 +393,8 @@ class PageScraperImages(QWidget):
         self.worker.progress.connect(self.progress.setValue)
         self.worker.preview_path.connect(self.display_preview)
         self.worker.finished.connect(self.on_finished)
-        self.preview_stack.setVisible(False)
+        self.label_preview.clear()
+        self.label_preview.setVisible(False)
         self.worker.start()
 
     def browse_file(self) -> None:
@@ -426,21 +421,12 @@ class PageScraperImages(QWidget):
     def display_preview(self, path: str) -> None:
         if not self.switch_preview.isChecked():
             return
-        suffix = Path(path).suffix.lower()
-        if suffix in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".svg"}:
-            pix = QPixmap(path)
-            if not pix.isNull():
-                pix = pix.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.preview_label.setPixmap(pix)
-                self.preview_stack.setCurrentWidget(self.preview_label)
-        else:
-            try:
-                text = Path(path).read_text(encoding="utf-8")
-            except Exception:
-                text = ""
-            self.preview_text.setPlainText(text)
-            self.preview_stack.setCurrentWidget(self.preview_text)
-        self.preview_stack.setVisible(True)
+        pix = QPixmap(path)
+        if pix.isNull():
+            return
+        pix = pix.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.label_preview.setPixmap(pix)
+        self.label_preview.setVisible(True)
 
 
 class PageScrapDescription(QWidget):
