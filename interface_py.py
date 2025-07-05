@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QFontComboBox,
 )
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QFont
 
 import scrap_lien_collection
@@ -261,7 +261,7 @@ class PageScraperImages(QWidget):
         self.checkbox_preview = QCheckBox("Afficher le dossier après téléchargement")
         self.checkbox_show_console = QCheckBox("Afficher la console")
         self.checkbox_show_console.setChecked(True)
-        self.checkbox_show_console.stateChanged.connect(self.toggle_console_visibility)
+        self.checkbox_show_console.toggled.connect(self.toggle_console_visibility)
 
         checkbox_layout = QHBoxLayout()
         checkbox_layout.addWidget(self.checkbox_preview)
@@ -348,8 +348,8 @@ class PageScraperImages(QWidget):
         self.manager.save_setting("images_dest", self.input_dest.text())
         self.manager.save_setting("images_selector", self.input_options.text())
 
-    def toggle_console_visibility(self, state: int) -> None:
-        self.log_view.setVisible(state == Qt.Checked)
+    def toggle_console_visibility(self, checked: bool) -> None:
+        self.log_view.setVisible(checked)
 
 
 class PageScrapDescription(QWidget):
