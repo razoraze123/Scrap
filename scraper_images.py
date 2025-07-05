@@ -109,7 +109,8 @@ def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | 
     if src.startswith("//"):
         src = "https:" + src
 
-    filename = os.path.basename(src.split("?")[0])
+    raw_filename = os.path.basename(src.split("?")[0])
+    filename = re.sub(r"-\d+(?=\.\w+$)", "", raw_filename)
     target = folder / filename
     if target.exists():
         return None
