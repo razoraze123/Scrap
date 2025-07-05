@@ -1,6 +1,7 @@
 import sys
 import logging
 import io
+import os
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QFontComboBox,
     QTextEdit,
+    QMessageBox,
 )
 from PySide6.QtCore import (
     QThread,
@@ -31,7 +33,7 @@ from PySide6.QtCore import (
     Property,
     QRect,
 )
-from PySide6.QtGui import QFont, QPainter, QColor, QPixmap
+from PySide6.QtGui import QFont, QPainter, QColor, QPixmap, QClipboard
 
 import scrap_lien_collection
 import scraper_images
