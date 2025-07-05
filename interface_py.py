@@ -21,9 +21,10 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QSpinBox,
     QFontComboBox,
+    QTextEdit,
 )
-from PySide6.QtCore import QThread, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QThread, Signal, Qt, QPropertyAnimation, Property
+from PySide6.QtGui import QFont, QPainter, QColor, QRect, QPixmap
 
 import scrap_lien_collection
 import scraper_images
@@ -41,6 +42,51 @@ class QtLogHandler(logging.Handler):
     def emit(self, record):
         msg = self.format(record)
         self._signal.emit(msg)
+
+
+class ToggleSwitch(QCheckBox):
+    """Simple ON/OFF switch widget."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setChecked(False)
+        self.setCursor(Qt.PointingHandCursor)
+        self._offset = 2
+        self._anim = QPropertyAnimation(self, b"offset", self)
+        self._anim.setDuration(120)
+        self.setFixedSize(40, 20)
+
+    def offset(self) -> int:  # type: ignore[override]
+        return self._offset
+
+    def setOffset(self, value: int) -> None:  # type: ignore[override]
+        self._offset = value
+        self.update()
+
+    offset = Property(int, offset, setOffset)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: D401
+        super().mouseReleaseEvent(event)
+        self.setChecked(not self.isChecked())
+
+    def setChecked(self, checked: bool) -> None:  # type: ignore[override]
+        start = self._offset
+        end = self.width() - self.height() + 2 if checked else 2
+        self._anim.stop()
+        self._anim.setStartValue(start)
+        self._anim.setEndValue(end)
+        self._anim.start()
+        super().setChecked(checked)
+
+    def paintEvent(self, event) -> None:  # noqa: D401
+        radius = self.height() / 2
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#4cd964" if self.isChecked() else "#bbbbbb"))
+        painter.drawRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+        painter.setBrush(QColor("white"))
+        painter.drawEllipse(QRect(self._offset, 2, self.height() - 4, self.height() - 4))
 
 
 class ScrapLienWorker(QThread):
@@ -83,13 +129,15 @@ class ScraperImagesWorker(QThread):
     log = Signal(str)
     progress = Signal(int)
     finished = Signal()
+    preview_path = Signal(str)
 
-    def __init__(self, urls: list[str], parent_dir: Path, selector: str, preview: bool):
+    def __init__(self, urls: list[str], parent_dir: Path, selector: str, open_folder: bool, show_preview: bool):
         super().__init__()
         self.urls = urls
         self.parent_dir = parent_dir
         self.selector = selector
-        self.preview = preview
+        self.open_folder = open_folder
+        self.show_preview = show_preview
 
     def run(self) -> None:
         logger = logging.getLogger()
@@ -106,6 +154,7 @@ class ScraperImagesWorker(QThread):
                     int(((url_index + i / t) / total_urls) * 100)
                 )
 
+            preview_sent = False
             for idx, url in enumerate(self.urls):
                 folder = scraper_images.download_images(
                     url,
@@ -113,7 +162,13 @@ class ScraperImagesWorker(QThread):
                     parent_dir=self.parent_dir,
                     progress_callback=make_cb(idx),
                 )
-                if self.preview:
+                if self.show_preview and not preview_sent:
+                    for item in folder.iterdir():
+                        if item.is_file():
+                            self.preview_path.emit(str(item))
+                            preview_sent = True
+                            break
+                if self.open_folder:
                     scraper_images._open_folder(folder)
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
@@ -259,13 +314,13 @@ class PageScraperImages(QWidget):
         layout.addWidget(self.input_options)
 
         self.checkbox_preview = QCheckBox("Afficher le dossier après téléchargement")
-        self.checkbox_show_console = QCheckBox("Afficher la console")
-        self.checkbox_show_console.setChecked(True)
-        self.checkbox_show_console.toggled.connect(self.toggle_console_visibility)
+        self.switch_preview = ToggleSwitch()
+        switch_label = QLabel("Aperçu")
 
         checkbox_layout = QHBoxLayout()
         checkbox_layout.addWidget(self.checkbox_preview)
-        checkbox_layout.addWidget(self.checkbox_show_console)
+        checkbox_layout.addWidget(switch_label)
+        checkbox_layout.addWidget(self.switch_preview)
         layout.addLayout(checkbox_layout)
 
         self.button_start = QPushButton("Scraper")
@@ -274,6 +329,16 @@ class PageScraperImages(QWidget):
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         layout.addWidget(self.progress)
+
+        self.preview_label = QLabel(alignment=Qt.AlignCenter)
+        self.preview_text = QTextEdit()
+        self.preview_text.setReadOnly(True)
+        self.preview_stack = QStackedWidget()
+        self.preview_stack.addWidget(self.preview_label)
+        self.preview_stack.addWidget(self.preview_text)
+        self.preview_stack.setVisible(False)
+        self.switch_preview.toggled.connect(self.preview_stack.setVisible)
+        layout.addWidget(self.preview_stack)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
@@ -319,12 +384,15 @@ class PageScraperImages(QWidget):
 
         self.save_fields()
 
-        preview = self.checkbox_preview.isChecked()
+        open_folder = self.checkbox_preview.isChecked()
+        show_preview = self.switch_preview.isChecked()
 
-        self.worker = ScraperImagesWorker(urls_list, dest, selector, preview)
+        self.worker = ScraperImagesWorker(urls_list, dest, selector, open_folder, show_preview)
         self.worker.log.connect(self.log_view.appendPlainText)
         self.worker.progress.connect(self.progress.setValue)
+        self.worker.preview_path.connect(self.display_preview)
         self.worker.finished.connect(self.on_finished)
+        self.preview_stack.setVisible(False)
         self.worker.start()
 
     def browse_file(self) -> None:
@@ -348,8 +416,24 @@ class PageScraperImages(QWidget):
         self.manager.save_setting("images_dest", self.input_dest.text())
         self.manager.save_setting("images_selector", self.input_options.text())
 
-    def toggle_console_visibility(self, checked: bool) -> None:
-        self.log_view.setVisible(checked)
+    def display_preview(self, path: str) -> None:
+        if not self.switch_preview.isChecked():
+            return
+        suffix = Path(path).suffix.lower()
+        if suffix in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".svg"}:
+            pix = QPixmap(path)
+            if not pix.isNull():
+                pix = pix.scaled(300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.preview_label.setPixmap(pix)
+                self.preview_stack.setCurrentWidget(self.preview_label)
+        else:
+            try:
+                text = Path(path).read_text(encoding="utf-8")
+            except Exception:
+                text = ""
+            self.preview_text.setPlainText(text)
+            self.preview_stack.setCurrentWidget(self.preview_text)
+        self.preview_stack.setVisible(True)
 
 
 class PageScrapDescription(QWidget):
