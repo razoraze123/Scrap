@@ -95,18 +95,19 @@ class ScraperImagesWorker(QThread):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         try:
-            multiple = len(self.urls) > 1
-            progress_cb = (
-                lambda i, t: self.progress.emit(int(i / t * 100))
-                if not multiple
-                else None
-            )
-            for url in self.urls:
+            total_urls = len(self.urls)
+
+            def make_cb(url_index: int):
+                return lambda i, t: self.progress.emit(
+                    int(((url_index + i / t) / total_urls) * 100)
+                )
+
+            for idx, url in enumerate(self.urls):
                 folder = scraper_images.download_images(
                     url,
                     css_selector=self.selector,
                     parent_dir=self.parent_dir,
-                    progress_callback=progress_cb,
+                    progress_callback=make_cb(idx),
                 )
                 if self.preview:
                     scraper_images._open_folder(folder)
@@ -307,8 +308,7 @@ class PageScraperImages(QWidget):
 
         self.worker = ScraperImagesWorker(urls_list, dest, selector, preview)
         self.worker.log.connect(self.log_view.appendPlainText)
-        if len(urls_list) == 1:
-            self.worker.progress.connect(self.progress.setValue)
+        self.worker.progress.connect(self.progress.setValue)
         self.worker.finished.connect(self.on_finished)
         self.worker.start()
 
