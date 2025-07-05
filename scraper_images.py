@@ -14,6 +14,8 @@ import binascii
 import logging
 import os
 import re
+import sys
+import subprocess
 from pathlib import Path
 from typing import Iterable, Callable, Optional
 import argparse
@@ -49,6 +51,19 @@ def _safe_folder(product_name: str, base_dir: Path | str = "images") -> Path:
     folder = Path(base_dir) / safe_name
     folder.mkdir(parents=True, exist_ok=True)
     return folder
+
+
+def _open_folder(path: Path) -> None:
+    """Open *path* in the system file explorer if possible."""
+    try:
+        if os.name == "nt":
+            os.startfile(path)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception as exc:
+        logger.warning("Impossible d'ouvrir le dossier %s : %s", path, exc)
 
 
 USER_AGENT = "ScrapImageBot/1.0"
@@ -137,10 +152,10 @@ def _find_product_name(driver: webdriver.Chrome) -> str:
 def download_images(
     url: str,
     css_selector: str = DEFAULT_CSS_SELECTOR,
-    dest_dir: Path | str = "images",
+    parent_dir: Path | str = "images",
     progress_callback: Optional[Callable[[int, int], None]] = None,
     user_agent: str = USER_AGENT,
-) -> None:
+) -> Path:
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
 
@@ -159,7 +174,7 @@ def download_images(
         )
 
         product_name = _find_product_name(driver)
-        folder = _safe_folder(product_name, dest_dir)
+        folder = _safe_folder(product_name, parent_dir)
 
         img_elements = driver.find_elements(By.CSS_SELECTOR, css_selector)
         logger.info(
@@ -190,6 +205,8 @@ def download_images(
     logger.info("\u27A1️ Ignorées     : %s", skipped)
     logger.info("-" * 50)
 
+    return folder
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -209,8 +226,19 @@ def main() -> None:
     parser.add_argument(
         "-d",
         "--dest",
+        "--parent-dir",
+        dest="parent_dir",
         default="images",
-        help="Dossier de destination (defaut: %(default)s)",
+        help="Dossier parent des images (defaut: %(default)s)",
+    )
+    parser.add_argument(
+        "--urls",
+        help="Fichier contenant une liste d'URLs (une par ligne)",
+    )
+    parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="Ouvrir le dossier des images après téléchargement",
     )
     parser.add_argument(
         "--user-agent",
@@ -225,23 +253,39 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not args.url:
-        args.url = input("\U0001F517 Entrez l'URL du produit WooCommerce : ").strip()
+    if args.url and args.urls:
+        parser.error("--url et --urls sont mutuellement exclusifs")
+
+    urls_list = []
+    if args.urls:
+        try:
+            with open(args.urls, "r", encoding="utf-8") as fh:
+                urls_list = [line.strip() for line in fh if line.strip()]
+        except OSError as exc:
+            parser.error(f"Impossible de lire le fichier {args.urls}: {exc}")
+
+    if not urls_list:
+        if not args.url:
+            args.url = input("\U0001F517 Entrez l'URL du produit WooCommerce : ").strip()
+        urls_list = [args.url]
 
     logging.basicConfig(
         level=getattr(logging, args.log_level),
         format="%(levelname)s: %(message)s",
     )
 
-    try:
-        download_images(
-            args.url,
-            css_selector=args.selector,
-            dest_dir=args.dest,
-            user_agent=args.user_agent,
-        )
-    except ValueError as exc:
-        logger.error("Erreur : %s", exc)
+    for url in urls_list:
+        try:
+            folder = download_images(
+                url,
+                css_selector=args.selector,
+                parent_dir=args.parent_dir,
+                user_agent=args.user_agent,
+            )
+            if args.preview:
+                _open_folder(folder)
+        except ValueError as exc:
+            logger.error("Erreur : %s", exc)
 
 
 if __name__ == "__main__":
