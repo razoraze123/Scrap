@@ -2,6 +2,7 @@ import sys
 import logging
 import io
 import os
+import subprocess
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -32,6 +33,7 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     Property,
     QRect,
+    QTimer,
 )
 from PySide6.QtGui import QFont, QPainter, QColor, QPixmap, QClipboard
 
@@ -786,6 +788,9 @@ class PageSettings(QWidget):
         self.button_reset = QPushButton("R\u00e9initialiser les param\u00e8tres")
         layout.addWidget(self.button_reset)
 
+        self.button_update = QPushButton("\ud83d\udd04 Mettre \u00e0 jour l'app (Git Pull)")
+        layout.addWidget(self.button_update)
+
         layout.addStretch()
 
         for w in [
@@ -811,6 +816,7 @@ class PageSettings(QWidget):
                 w.currentFontChanged.connect(self.update_settings)
 
         self.button_reset.clicked.connect(self.reset_settings)
+        self.button_update.clicked.connect(self.update_and_restart)
 
     def update_settings(self) -> None:
         s = self.manager.settings
@@ -839,6 +845,32 @@ class PageSettings(QWidget):
         self.checkbox_anim.setChecked(self.manager.settings["animations"])
         self.manager.save()
         self.apply_cb()
+
+    def update_and_restart(self) -> None:
+        """Run git pull and restart the application if successful."""
+        try:
+            output = subprocess.check_output(
+                ["git", "pull", "origin", "main"],
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+        except FileNotFoundError:
+            QMessageBox.critical(
+                self,
+                "Erreur",
+                "Git n'est pas install\u00e9 ou introuvable.",
+            )
+            return
+        except subprocess.CalledProcessError as exc:
+            QMessageBox.critical(
+                self,
+                "Erreur lors de la mise \u00e0 jour",
+                exc.output or str(exc),
+            )
+            return
+
+        QMessageBox.information(self, "Mise \u00e0 jour", output)
+        QTimer.singleShot(1000, lambda: os.execv(sys.executable, [sys.executable] + sys.argv))
 
 
 class MainWindow(QMainWindow):
