@@ -357,8 +357,10 @@ class PageScrapLienCollection(QWidget):
                 "scrap_lien_selector", scrap_lien_collection.DEFAULT_SELECTOR
             )
         )
-        layout.addWidget(QLabel("Sélecteur CSS"))
-        layout.addWidget(self.input_selector)
+        # Champ géré via l'onglet Profils – non ajouté au layout
+        label_selector = QLabel("Sélecteur CSS")
+        self.input_selector.hide()
+        label_selector.hide()
 
         self.combo_log = QComboBox()
         self.combo_log.addItems(["DEBUG", "INFO", "WARNING", "ERROR"])
@@ -440,8 +442,10 @@ class PageScraperImages(QWidget):
         layout.addLayout(dir_layout)
 
         self.input_options = QLineEdit(manager.settings.get("images_selector", ""))
-        layout.addWidget(QLabel("Sélecteur CSS"))
-        layout.addWidget(self.input_options)
+        # Champ géré via l'onglet Profils – non ajouté au layout
+        label_options = QLabel("Sélecteur CSS")
+        self.input_options.hide()
+        label_options.hide()
 
         self.checkbox_preview = QCheckBox("Afficher le dossier après téléchargement")
         self.switch_preview = ToggleSwitch()
@@ -567,8 +571,10 @@ class PageScrapDescription(QWidget):
         self.input_selector = QLineEdit(
             manager.settings.get("desc_selector", scrap_description_produit.DEFAULT_SELECTOR)
         )
-        layout.addWidget(QLabel("Sélecteur CSS"))
-        layout.addWidget(self.input_selector)
+        # Champ géré via l'onglet Profils – non ajouté au layout
+        label_selector = QLabel("Sélecteur CSS")
+        self.input_selector.hide()
+        label_selector.hide()
 
         self.input_output = QLineEdit(manager.settings.get("desc_output", "description.html"))
         layout.addWidget(QLabel("Fichier de sortie"))
