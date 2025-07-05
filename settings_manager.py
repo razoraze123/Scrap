@@ -12,6 +12,20 @@ DEFAULT_SETTINGS = {
     "font_family": "Consolas",
     "font_size": 13,
     "animations": True,
+
+    # Last used values for scrapers
+    "scrap_lien_url": "",
+    "scrap_lien_output": "products.txt",
+    "scrap_lien_selector": "",
+
+    "images_url": "",
+    "images_file": "",
+    "images_dest": "images",
+    "images_selector": "",
+
+    "desc_url": "",
+    "desc_selector": "",
+    "desc_output": "description.html",
 }
 
 
@@ -19,9 +33,13 @@ class SettingsManager:
     def __init__(self, path: str = "settings.json") -> None:
         self.path = Path(path)
         self.settings = DEFAULT_SETTINGS.copy()
-        self.load()
+        self.load_settings()
 
     def load(self) -> None:
+        """Deprecated compatibility alias for load_settings."""
+        self.load_settings()
+
+    def load_settings(self) -> None:
         if self.path.is_file():
             try:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -31,12 +49,21 @@ class SettingsManager:
                 pass
 
     def save(self) -> None:
+        """Write current settings to disk."""
         try:
             self.path.write_text(json.dumps(self.settings, indent=2), encoding="utf-8")
         except Exception:
             pass
 
+    def save_setting(self, key: str, value) -> None:
+        """Update a single setting and persist it."""
+        self.settings[key] = value
+        self.save()
+
     def reset(self) -> None:
+        self.reset_settings()
+
+    def reset_settings(self) -> None:
         self.settings = DEFAULT_SETTINGS.copy()
         self.save()
 

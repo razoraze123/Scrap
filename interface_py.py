@@ -153,20 +153,25 @@ class ScrapDescriptionWorker(QThread):
 
 
 class PageScrapLienCollection(QWidget):
-    def __init__(self):
+    def __init__(self, manager: SettingsManager):
         super().__init__()
+        self.manager = manager
         layout = QVBoxLayout(self)
 
-        self.input_url = QLineEdit()
+        self.input_url = QLineEdit(manager.settings.get("scrap_lien_url", ""))
         self.input_url.setPlaceholderText("URL de la collection")
         layout.addWidget(QLabel("URL de la collection"))
         layout.addWidget(self.input_url)
 
-        self.input_output = QLineEdit("products.txt")
+        self.input_output = QLineEdit(manager.settings.get("scrap_lien_output", "products.txt"))
         layout.addWidget(QLabel("Fichier de sortie"))
         layout.addWidget(self.input_output)
 
-        self.input_selector = QLineEdit(scrap_lien_collection.DEFAULT_SELECTOR)
+        self.input_selector = QLineEdit(
+            manager.settings.get(
+                "scrap_lien_selector", scrap_lien_collection.DEFAULT_SELECTOR
+            )
+        )
         layout.addWidget(QLabel("Sélecteur CSS"))
         layout.addWidget(self.input_selector)
 
@@ -189,6 +194,9 @@ class PageScrapLienCollection(QWidget):
 
         self.worker: ScrapLienWorker | None = None
 
+        for widget in [self.input_url, self.input_output, self.input_selector]:
+            widget.editingFinished.connect(self.save_fields)
+
     def start_worker(self) -> None:
         url = self.input_url.text().strip()
         output = Path(self.input_output.text().strip() or "products.txt")
@@ -202,6 +210,8 @@ class PageScrapLienCollection(QWidget):
         self.button_start.setEnabled(False)
         self.log_view.clear()
 
+        self.save_fields()
+
         self.worker = ScrapLienWorker(url, output, selector, log_level)
         self.worker.log.connect(self.log_view.appendPlainText)
         self.worker.finished.connect(self.on_finished)
@@ -210,18 +220,24 @@ class PageScrapLienCollection(QWidget):
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
 
+    def save_fields(self) -> None:
+        self.manager.save_setting("scrap_lien_url", self.input_url.text())
+        self.manager.save_setting("scrap_lien_output", self.input_output.text())
+        self.manager.save_setting("scrap_lien_selector", self.input_selector.text())
+
 
 class PageScraperImages(QWidget):
-    def __init__(self):
+    def __init__(self, manager: SettingsManager):
         super().__init__()
+        self.manager = manager
         layout = QVBoxLayout(self)
-        self.input_source = QLineEdit()
+        self.input_source = QLineEdit(manager.settings.get("images_url", ""))
         self.input_source.setPlaceholderText("URL unique")
         layout.addWidget(QLabel("URL unique"))
         layout.addWidget(self.input_source)
 
         file_layout = QHBoxLayout()
-        self.input_urls_file = QLineEdit()
+        self.input_urls_file = QLineEdit(manager.settings.get("images_file", ""))
         file_layout.addWidget(self.input_urls_file)
         self.button_file = QPushButton("\U0001F4C1 Choisir un fichier txt")
         self.button_file.clicked.connect(self.browse_file)
@@ -230,7 +246,7 @@ class PageScraperImages(QWidget):
         layout.addLayout(file_layout)
 
         dir_layout = QHBoxLayout()
-        self.input_dest = QLineEdit("images")
+        self.input_dest = QLineEdit(manager.settings.get("images_dest", "images"))
         dir_layout.addWidget(self.input_dest)
         self.button_dir = QPushButton("\U0001F4C2 Choisir dossier")
         self.button_dir.clicked.connect(self.browse_dir)
@@ -238,7 +254,7 @@ class PageScraperImages(QWidget):
         layout.addWidget(QLabel("Dossier parent"))
         layout.addLayout(dir_layout)
 
-        self.input_options = QLineEdit()
+        self.input_options = QLineEdit(manager.settings.get("images_selector", ""))
         layout.addWidget(QLabel("Sélecteur CSS"))
         layout.addWidget(self.input_options)
 
@@ -260,6 +276,14 @@ class PageScraperImages(QWidget):
         self.worker: ScraperImagesWorker | None = None
 
         self.button_start.clicked.connect(self.start_worker)
+
+        for widget in [
+            self.input_source,
+            self.input_urls_file,
+            self.input_dest,
+            self.input_options,
+        ]:
+            widget.editingFinished.connect(self.save_fields)
 
     def start_worker(self) -> None:
         url = self.input_source.text().strip()
@@ -286,6 +310,8 @@ class PageScraperImages(QWidget):
         self.progress.setValue(0)
         self.log_view.clear()
 
+        self.save_fields()
+
         preview = self.checkbox_preview.isChecked()
 
         self.worker = ScraperImagesWorker(urls_list, dest, selector, preview)
@@ -298,31 +324,42 @@ class PageScraperImages(QWidget):
         file_path, _ = QFileDialog.getOpenFileName(self, "Sélectionner un fichier", "", "Text Files (*.txt)")
         if file_path:
             self.input_urls_file.setText(file_path)
+            self.save_fields()
 
     def browse_dir(self) -> None:
         directory = QFileDialog.getExistingDirectory(self, "Sélectionner un dossier")
         if directory:
             self.input_dest.setText(directory)
+            self.save_fields()
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
 
+    def save_fields(self) -> None:
+        self.manager.save_setting("images_url", self.input_source.text())
+        self.manager.save_setting("images_file", self.input_urls_file.text())
+        self.manager.save_setting("images_dest", self.input_dest.text())
+        self.manager.save_setting("images_selector", self.input_options.text())
+
 
 class PageScrapDescription(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, manager: SettingsManager) -> None:
         super().__init__()
+        self.manager = manager
         layout = QVBoxLayout(self)
 
-        self.input_url = QLineEdit()
+        self.input_url = QLineEdit(manager.settings.get("desc_url", ""))
         self.input_url.setPlaceholderText("URL du produit")
         layout.addWidget(QLabel("URL du produit"))
         layout.addWidget(self.input_url)
 
-        self.input_selector = QLineEdit(scrap_description_produit.DEFAULT_SELECTOR)
+        self.input_selector = QLineEdit(
+            manager.settings.get("desc_selector", scrap_description_produit.DEFAULT_SELECTOR)
+        )
         layout.addWidget(QLabel("Sélecteur CSS"))
         layout.addWidget(self.input_selector)
 
-        self.input_output = QLineEdit("description.html")
+        self.input_output = QLineEdit(manager.settings.get("desc_output", "description.html"))
         layout.addWidget(QLabel("Fichier de sortie"))
         layout.addWidget(self.input_output)
 
@@ -337,6 +374,9 @@ class PageScrapDescription(QWidget):
         self.worker: ScrapDescriptionWorker | None = None
         self.button_start.clicked.connect(self.start_worker)
 
+        for widget in [self.input_url, self.input_selector, self.input_output]:
+            widget.editingFinished.connect(self.save_fields)
+
     def start_worker(self) -> None:
         url = self.input_url.text().strip()
         selector = self.input_selector.text().strip() or scrap_description_produit.DEFAULT_SELECTOR
@@ -349,6 +389,8 @@ class PageScrapDescription(QWidget):
         self.button_start.setEnabled(False)
         self.log_view.clear()
 
+        self.save_fields()
+
         self.worker = ScrapDescriptionWorker(url, selector, output)
         self.worker.log.connect(self.log_view.appendPlainText)
         self.worker.finished.connect(self.on_finished)
@@ -356,6 +398,11 @@ class PageScrapDescription(QWidget):
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
+
+    def save_fields(self) -> None:
+        self.manager.save_setting("desc_url", self.input_url.text())
+        self.manager.save_setting("desc_selector", self.input_selector.text())
+        self.manager.save_setting("desc_output", self.input_output.text())
 
 
 class PageSettings(QWidget):
@@ -486,9 +533,9 @@ class MainWindow(QMainWindow):
         self.menu.addItem("Param\u00e8tres")
 
         self.stack = QStackedWidget()
-        self.page_scrap = PageScrapLienCollection()
-        self.page_images = PageScraperImages()
-        self.page_desc = PageScrapDescription()
+        self.page_scrap = PageScrapLienCollection(settings)
+        self.page_images = PageScraperImages(settings)
+        self.page_desc = PageScrapDescription(settings)
         self.page_settings = PageSettings(settings, self.apply_settings)
         self.stack.addWidget(self.page_scrap)
         self.stack.addWidget(self.page_images)
