@@ -19,12 +19,16 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QFileDialog,
     QCheckBox,
+    QSpinBox,
+    QFontComboBox,
 )
 from PySide6.QtCore import QThread, Signal
+from PySide6.QtGui import QFont
 
 import scrap_lien_collection
 import scraper_images
 import scrap_description_produit
+from settings_manager import SettingsManager, apply_settings
 
 
 class QtLogHandler(logging.Handler):
@@ -173,48 +177,12 @@ class PageScrapLienCollection(QWidget):
         layout.addWidget(self.combo_log)
 
         self.button_start = QPushButton("Lancer le scraping")
-        self.button_start.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #007BFF;
-                color: white;
-                border-radius: 8px;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 14px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-            QPushButton:pressed {
-                background-color: #003d80;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-            """
-        )
         layout.addWidget(self.button_start)
         self.button_start.clicked.connect(self.start_worker)
 
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setStyleSheet(
-            """
-            QPlainTextEdit {
-                background-color: #fdfdfd;
-                color: #222222;
-                font-family: Consolas, \"Courier New\", monospace;
-                font-size: 13px;
-                border: 1px solid #cccccc;
-                border-radius: 6px;
-                padding: 6px;
-            }
-            """
-        )
         layout.addWidget(self.log_view)
 
         layout.addStretch()
@@ -278,72 +246,14 @@ class PageScraperImages(QWidget):
         layout.addWidget(self.checkbox_preview)
 
         self.button_start = QPushButton("Scraper")
-        self.button_start.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #007BFF;
-                color: white;
-                border-radius: 8px;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 14px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-            QPushButton:pressed {
-                background-color: #003d80;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-            """
-        )
         layout.addWidget(self.button_start)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
-        self.progress.setStyleSheet(
-            """
-            QProgressBar {
-                border: 2px solid #555;
-                border-radius: 5px;
-                text-align: center;
-                font-weight: bold;
-                height: 20px;
-                background-color: #f0f0f0;
-            }
-
-            QProgressBar::chunk {
-                background: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 0,
-                    stop: 0 #00c6ff,
-                    stop: 1 #0072ff
-                );
-                border-radius: 5px;
-                margin: 1px;
-            }
-            """
-        )
         layout.addWidget(self.progress)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setStyleSheet(
-            """
-            QPlainTextEdit {
-                background-color: #fdfdfd;
-                color: #222222;
-                font-family: Consolas, "Courier New", monospace;
-                font-size: 13px;
-                border: 1px solid #cccccc;
-                border-radius: 6px;
-                padding: 6px;
-            }
-            """
-        )
         layout.addWidget(self.log_view)
         layout.addStretch()
 
@@ -417,46 +327,10 @@ class PageScrapDescription(QWidget):
         layout.addWidget(self.input_output)
 
         self.button_start = QPushButton("Extraire")
-        self.button_start.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #007BFF;
-                color: white;
-                border-radius: 8px;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 14px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #0056b3;
-            }
-            QPushButton:pressed {
-                background-color: #003d80;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-            """
-        )
         layout.addWidget(self.button_start)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setStyleSheet(
-            """
-            QPlainTextEdit {
-                background-color: #fdfdfd;
-                color: #222222;
-                font-family: Consolas, "Courier New", monospace;
-                font-size: 13px;
-                border: 1px solid #cccccc;
-                border-radius: 6px;
-                padding: 6px;
-            }
-            """
-        )
         layout.addWidget(self.log_view)
         layout.addStretch()
 
@@ -484,9 +358,122 @@ class PageScrapDescription(QWidget):
         self.button_start.setEnabled(True)
 
 
-class MainWindow(QMainWindow):
-    def __init__(self):
+class PageSettings(QWidget):
+    """UI page allowing the user to customise the application."""
+
+    def __init__(self, manager: SettingsManager, apply_cb) -> None:
         super().__init__()
+        self.manager = manager
+        self.apply_cb = apply_cb
+        layout = QVBoxLayout(self)
+
+        self.input_button_bg = QLineEdit(manager.settings["button_bg_color"])
+        layout.addWidget(QLabel("Couleur de fond des boutons"))
+        layout.addWidget(self.input_button_bg)
+
+        self.input_button_text = QLineEdit(manager.settings["button_text_color"])
+        layout.addWidget(QLabel("Couleur du texte des boutons"))
+        layout.addWidget(self.input_button_text)
+
+        self.combo_theme = QComboBox()
+        self.combo_theme.addItems(["clair", "sombre"])
+        self.combo_theme.setCurrentIndex(1 if manager.settings["theme"] == "dark" else 0)
+        layout.addWidget(QLabel("Th\u00e8me global"))
+        layout.addWidget(self.combo_theme)
+
+        self.spin_radius_button = QSpinBox()
+        self.spin_radius_button.setRange(0, 30)
+        self.spin_radius_button.setValue(manager.settings["button_radius"])
+        layout.addWidget(QLabel("Radius des boutons"))
+        layout.addWidget(self.spin_radius_button)
+
+        self.spin_radius_input = QSpinBox()
+        self.spin_radius_input.setRange(0, 30)
+        self.spin_radius_input.setValue(manager.settings["lineedit_radius"])
+        layout.addWidget(QLabel("Radius des champs de saisie"))
+        layout.addWidget(self.spin_radius_input)
+
+        self.spin_radius_console = QSpinBox()
+        self.spin_radius_console.setRange(0, 30)
+        self.spin_radius_console.setValue(manager.settings["console_radius"])
+        layout.addWidget(QLabel("Radius de la console"))
+        layout.addWidget(self.spin_radius_console)
+
+        self.font_combo = QFontComboBox()
+        self.font_combo.setCurrentFont(QFont(manager.settings["font_family"]))
+        layout.addWidget(QLabel("Police"))
+        layout.addWidget(self.font_combo)
+
+        self.spin_font_size = QSpinBox()
+        self.spin_font_size.setRange(6, 30)
+        self.spin_font_size.setValue(manager.settings["font_size"])
+        layout.addWidget(QLabel("Taille de police"))
+        layout.addWidget(self.spin_font_size)
+
+        self.checkbox_anim = QCheckBox("Activer les animations")
+        self.checkbox_anim.setChecked(manager.settings["animations"])
+        layout.addWidget(self.checkbox_anim)
+
+        self.button_reset = QPushButton("R\u00e9initialiser les param\u00e8tres")
+        layout.addWidget(self.button_reset)
+
+        layout.addStretch()
+
+        for w in [
+            self.input_button_bg,
+            self.input_button_text,
+            self.combo_theme,
+            self.spin_radius_button,
+            self.spin_radius_input,
+            self.spin_radius_console,
+            self.font_combo,
+            self.spin_font_size,
+            self.checkbox_anim,
+        ]:
+            if isinstance(w, (QLineEdit, QComboBox)):
+                w.editingFinished.connect(self.update_settings)
+            elif isinstance(w, QSpinBox):
+                w.valueChanged.connect(self.update_settings)
+            elif isinstance(w, QCheckBox):
+                w.stateChanged.connect(self.update_settings)
+            elif isinstance(w, QFontComboBox):
+                w.currentFontChanged.connect(self.update_settings)
+
+        self.button_reset.clicked.connect(self.reset_settings)
+
+    def update_settings(self) -> None:
+        s = self.manager.settings
+        s["button_bg_color"] = self.input_button_bg.text() or s["button_bg_color"]
+        s["button_text_color"] = self.input_button_text.text() or s["button_text_color"]
+        s["theme"] = "dark" if self.combo_theme.currentIndex() == 1 else "light"
+        s["button_radius"] = self.spin_radius_button.value()
+        s["lineedit_radius"] = self.spin_radius_input.value()
+        s["console_radius"] = self.spin_radius_console.value()
+        s["font_family"] = self.font_combo.currentFont().family()
+        s["font_size"] = self.spin_font_size.value()
+        s["animations"] = self.checkbox_anim.isChecked()
+        self.manager.save()
+        self.apply_cb()
+
+    def reset_settings(self) -> None:
+        self.manager.reset()
+        self.input_button_bg.setText(self.manager.settings["button_bg_color"])
+        self.input_button_text.setText(self.manager.settings["button_text_color"])
+        self.combo_theme.setCurrentIndex(1 if self.manager.settings["theme"] == "dark" else 0)
+        self.spin_radius_button.setValue(self.manager.settings["button_radius"])
+        self.spin_radius_input.setValue(self.manager.settings["lineedit_radius"])
+        self.spin_radius_console.setValue(self.manager.settings["console_radius"])
+        self.font_combo.setCurrentFont(QFont(self.manager.settings["font_family"]))
+        self.spin_font_size.setValue(self.manager.settings["font_size"])
+        self.checkbox_anim.setChecked(self.manager.settings["animations"])
+        self.manager.save()
+        self.apply_cb()
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, settings: SettingsManager):
+        super().__init__()
+        self.settings = settings
         self.setWindowTitle("Interface Py")
 
         self.menu = QListWidget()
@@ -494,14 +481,17 @@ class MainWindow(QMainWindow):
         self.menu.addItem("Scrap Liens Collection")
         self.menu.addItem("Scraper Images")
         self.menu.addItem("Scrap Description")
+        self.menu.addItem("Param\u00e8tres")
 
         self.stack = QStackedWidget()
         self.page_scrap = PageScrapLienCollection()
         self.page_images = PageScraperImages()
         self.page_desc = PageScrapDescription()
+        self.page_settings = PageSettings(settings, self.apply_settings)
         self.stack.addWidget(self.page_scrap)
         self.stack.addWidget(self.page_images)
         self.stack.addWidget(self.page_desc)
+        self.stack.addWidget(self.page_settings)
 
         self.menu.currentRowChanged.connect(self.stack.setCurrentIndex)
 
@@ -512,10 +502,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
         self.menu.setCurrentRow(0)
 
+        self.apply_settings()
+
+    def apply_settings(self) -> None:
+        apply_settings(QApplication.instance(), self.settings.settings)
+
 
 def main() -> None:
     app = QApplication(sys.argv)
-    window = MainWindow()
+    manager = SettingsManager()
+    window = MainWindow(manager)
     window.resize(800, 600)
     window.show()
     sys.exit(app.exec())
