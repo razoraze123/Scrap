@@ -22,6 +22,7 @@ DEFAULT_SETTINGS = {
     "images_file": "",
     "images_dest": "images",
     "images_selector": "",
+    "images_alt_json": "product_sentences.json",
 
     "desc_url": "",
     "desc_selector": "",

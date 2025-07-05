@@ -144,13 +144,14 @@ class ScraperImagesWorker(QThread):
     finished = Signal()
     preview_path = Signal(str)
 
-    def __init__(self, urls: list[str], parent_dir: Path, selector: str, open_folder: bool, show_preview: bool):
+    def __init__(self, urls: list[str], parent_dir: Path, selector: str, open_folder: bool, show_preview: bool, alt_json: str | None):
         super().__init__()
         self.urls = urls
         self.parent_dir = parent_dir
         self.selector = selector
         self.open_folder = open_folder
         self.show_preview = show_preview
+        self.alt_json = alt_json
 
     def run(self) -> None:
         logger = logging.getLogger()
@@ -174,6 +175,7 @@ class ScraperImagesWorker(QThread):
                     css_selector=self.selector,
                     parent_dir=self.parent_dir,
                     progress_callback=make_cb(idx),
+                    alt_json_path=self.alt_json,
                 )
                 folder = info["folder"]
                 if self.show_preview and not preview_sent and info.get("first_image"):
@@ -248,6 +250,10 @@ class PageProfiles(QWidget):
         layout.addWidget(QLabel("Sélecteur Collection"))
         layout.addWidget(self.input_collection)
 
+        self.input_alt_json = QLineEdit()
+        layout.addWidget(QLabel("Fichier ALT JSON"))
+        layout.addWidget(self.input_alt_json)
+
         self.checkbox_auto = QCheckBox("Appliquer automatiquement après chargement")
         layout.addWidget(self.checkbox_auto)
 
@@ -298,12 +304,14 @@ class PageProfiles(QWidget):
         self.input_images.setText(selectors.get("images", ""))
         self.input_desc.setText(selectors.get("description", ""))
         self.input_collection.setText(selectors.get("collection", ""))
+        self.input_alt_json.setText(data.get("sentences_file", ""))
 
     def new_profile(self) -> None:
         self.input_name.clear()
         self.input_images.clear()
         self.input_desc.clear()
         self.input_collection.clear()
+        self.input_alt_json.clear()
 
     def save_profile(self) -> None:
         name = self.input_name.text().strip()
@@ -316,6 +324,7 @@ class PageProfiles(QWidget):
                 "description": self.input_desc.text().strip(),
                 "collection": self.input_collection.text().strip(),
             },
+            "sentences_file": self.input_alt_json.text().strip(),
         }
         path = self.profile_path(name)
         self.profile_manager.save_profile(path, data)
@@ -451,6 +460,10 @@ class PageScraperImages(QWidget):
         self.input_options.hide()
         label_options.hide()
 
+        self.input_alt_json = QLineEdit(manager.settings.get("images_alt_json", "product_sentences.json"))
+        layout.addWidget(QLabel("Fichier ALT JSON"))
+        layout.addWidget(self.input_alt_json)
+
         self.checkbox_preview = QCheckBox("Afficher le dossier après téléchargement")
         self.switch_preview = ToggleSwitch()
         switch_label = QLabel("Aperçu")
@@ -487,6 +500,7 @@ class PageScraperImages(QWidget):
             self.input_urls_file,
             self.input_dest,
             self.input_options,
+            self.input_alt_json,
         ]:
             widget.editingFinished.connect(self.save_fields)
 
@@ -520,7 +534,15 @@ class PageScraperImages(QWidget):
         open_folder = self.checkbox_preview.isChecked()
         show_preview = self.switch_preview.isChecked()
 
-        self.worker = ScraperImagesWorker(urls_list, dest, selector, open_folder, show_preview)
+        alt_json = self.input_alt_json.text().strip() or None
+        self.worker = ScraperImagesWorker(
+            urls_list,
+            dest,
+            selector,
+            open_folder,
+            show_preview,
+            alt_json,
+        )
         self.worker.log.connect(self.log_view.appendPlainText)
         self.worker.progress.connect(self.progress.setValue)
         self.worker.preview_path.connect(self.display_preview)
@@ -549,6 +571,7 @@ class PageScraperImages(QWidget):
         self.manager.save_setting("images_file", self.input_urls_file.text())
         self.manager.save_setting("images_dest", self.input_dest.text())
         self.manager.save_setting("images_selector", self.input_options.text())
+        self.manager.save_setting("images_alt_json", self.input_alt_json.text())
 
     def display_preview(self, path: str) -> None:
         if not self.switch_preview.isChecked():

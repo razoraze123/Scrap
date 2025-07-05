@@ -224,6 +224,8 @@ def download_images(
     progress_callback: Optional[Callable[[int, int], None]] = None,
     user_agent: str = USER_AGENT,
     use_alt_json: bool = USE_ALT_JSON,
+    *,
+    alt_json_path: str | Path | None = None,
 ) -> dict:
     """Download all images from *url* and return folder and first image."""
     if not url.lower().startswith(("http://", "https://")):
@@ -237,7 +239,11 @@ def download_images(
     downloaded = 0
     skipped = 0
 
-    sentences = _load_alt_sentences() if use_alt_json else {}
+    if use_alt_json:
+        path = Path(alt_json_path) if alt_json_path else ALT_JSON_PATH
+        sentences = _load_alt_sentences(path)
+    else:
+        sentences = {}
     warned_missing: set[str] = set()
 
     try:
@@ -334,6 +340,11 @@ def main() -> None:
         + " le renommage via product_sentences.json",
     )
     parser.add_argument(
+        "--alt-json-path",
+        default=str(ALT_JSON_PATH),
+        help="Chemin du fichier JSON pour le renommage (defaut: %(default)s)",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -371,6 +382,7 @@ def main() -> None:
                 parent_dir=args.parent_dir,
                 user_agent=args.user_agent,
                 use_alt_json=args.use_alt_json,
+                alt_json_path=args.alt_json_path,
             )
             if args.preview:
                 _open_folder(info["folder"])
