@@ -33,6 +33,10 @@ class SiteProfileManager:
             main_window.page_images.input_options.setText(
                 selectors.get("images", "")
             )
+        if hasattr(main_window.page_images, "input_alt_json"):
+            main_window.page_images.input_alt_json.setText(
+                profile.get("sentences_file", "")
+            )
         if hasattr(main_window.page_desc, "input_selector"):
             main_window.page_desc.input_selector.setText(
                 selectors.get("description", "")
