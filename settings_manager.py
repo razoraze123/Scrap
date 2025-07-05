@@ -131,6 +131,7 @@ def apply_settings(app, settings: dict) -> None:
         padding: 6px;
     }}
     QProgressBar {{
+        color: #000000;
         border: 2px solid #555;
         border-radius: 5px;
         text-align: center;
