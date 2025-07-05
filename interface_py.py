@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QLabel,
     QProgressBar,
+    QFileDialog,
+    QCheckBox,
 )
 from PySide6.QtCore import QThread, Signal
 
@@ -78,11 +80,12 @@ class ScraperImagesWorker(QThread):
     progress = Signal(int)
     finished = Signal()
 
-    def __init__(self, url: str, dest: Path, selector: str):
+    def __init__(self, urls: list[str], parent_dir: Path, selector: str, preview: bool):
         super().__init__()
-        self.url = url
-        self.dest = dest
+        self.urls = urls
+        self.parent_dir = parent_dir
         self.selector = selector
+        self.preview = preview
 
     def run(self) -> None:
         logger = logging.getLogger()
@@ -92,12 +95,21 @@ class ScraperImagesWorker(QThread):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         try:
-            scraper_images.download_images(
-                self.url,
-                css_selector=self.selector,
-                dest_dir=self.dest,
-                progress_callback=lambda i, t: self.progress.emit(int(i / t * 100)),
+            multiple = len(self.urls) > 1
+            progress_cb = (
+                lambda i, t: self.progress.emit(int(i / t * 100))
+                if not multiple
+                else None
             )
+            for url in self.urls:
+                folder = scraper_images.download_images(
+                    url,
+                    css_selector=self.selector,
+                    parent_dir=self.parent_dir,
+                    progress_callback=progress_cb,
+                )
+                if self.preview:
+                    scraper_images._open_folder(folder)
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
         finally:
@@ -163,6 +175,7 @@ class PageScrapLienCollection(QWidget):
         layout.addWidget(self.button_start)
         self.button_start.clicked.connect(self.start_worker)
 
+
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         layout.addWidget(self.log_view)
@@ -198,17 +211,34 @@ class PageScraperImages(QWidget):
         super().__init__()
         layout = QVBoxLayout(self)
         self.input_source = QLineEdit()
-        self.input_source.setPlaceholderText("URL ou dossier source")
-        layout.addWidget(QLabel("Source"))
+        self.input_source.setPlaceholderText("URL unique")
+        layout.addWidget(QLabel("URL unique"))
         layout.addWidget(self.input_source)
 
-        self.input_dest = QLineEdit()
-        layout.addWidget(QLabel("Destination"))
-        layout.addWidget(self.input_dest)
+        file_layout = QHBoxLayout()
+        self.input_urls_file = QLineEdit()
+        file_layout.addWidget(self.input_urls_file)
+        self.button_file = QPushButton("\U0001F4C1 Choisir un fichier txt")
+        self.button_file.clicked.connect(self.browse_file)
+        file_layout.addWidget(self.button_file)
+        layout.addWidget(QLabel("Fichier d'URLs"))
+        layout.addLayout(file_layout)
+
+        dir_layout = QHBoxLayout()
+        self.input_dest = QLineEdit("images")
+        dir_layout.addWidget(self.input_dest)
+        self.button_dir = QPushButton("\U0001F4C2 Choisir dossier")
+        self.button_dir.clicked.connect(self.browse_dir)
+        dir_layout.addWidget(self.button_dir)
+        layout.addWidget(QLabel("Dossier parent"))
+        layout.addLayout(dir_layout)
 
         self.input_options = QLineEdit()
         layout.addWidget(QLabel("Sélecteur CSS"))
         layout.addWidget(self.input_options)
+
+        self.checkbox_preview = QCheckBox("Afficher le dossier après téléchargement")
+        layout.addWidget(self.checkbox_preview)
 
         self.button_start = QPushButton("Scraper")
         layout.addWidget(self.button_start)
@@ -228,22 +258,47 @@ class PageScraperImages(QWidget):
 
     def start_worker(self) -> None:
         url = self.input_source.text().strip()
+        file_path = self.input_urls_file.text().strip()
         dest = Path(self.input_dest.text().strip() or "images")
         selector = self.input_options.text().strip() or scraper_images.DEFAULT_CSS_SELECTOR
 
-        if not url:
-            self.log_view.appendPlainText("Veuillez renseigner l'URL.")
-            return
+        urls_list: list[str] = []
+        if file_path:
+            try:
+                with open(file_path, "r", encoding="utf-8") as fh:
+                    urls_list = [line.strip() for line in fh if line.strip()]
+            except OSError as exc:
+                self.log_view.appendPlainText(f"Impossible de lire {file_path}: {exc}")
+                return
+
+        if not urls_list:
+            if not url:
+                self.log_view.appendPlainText("Veuillez renseigner l'URL ou choisir un fichier.")
+                return
+            urls_list = [url]
 
         self.button_start.setEnabled(False)
         self.progress.setValue(0)
         self.log_view.clear()
 
-        self.worker = ScraperImagesWorker(url, dest, selector)
+        preview = self.checkbox_preview.isChecked()
+
+        self.worker = ScraperImagesWorker(urls_list, dest, selector, preview)
         self.worker.log.connect(self.log_view.appendPlainText)
-        self.worker.progress.connect(self.progress.setValue)
+        if len(urls_list) == 1:
+            self.worker.progress.connect(self.progress.setValue)
         self.worker.finished.connect(self.on_finished)
         self.worker.start()
+
+    def browse_file(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(self, "Sélectionner un fichier", "", "Text Files (*.txt)")
+        if file_path:
+            self.input_urls_file.setText(file_path)
+
+    def browse_dir(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Sélectionner un dossier")
+        if directory:
+            self.input_dest.setText(directory)
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
