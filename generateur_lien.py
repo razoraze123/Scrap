@@ -71,10 +71,15 @@ class WooImageURLGenerator(QWidget):
         date_path = self.input_date.text().strip()
 
         links = []
-        for file in os.listdir(self.folder_path):
-            if file.lower().endswith(('.webp', '.jpg', '.jpeg', '.png')):
-                file_url = f"{base_url}/wp-content/uploads/{date_path}/{file}"
-                links.append(file_url)
+        for root, _, files in os.walk(self.folder_path):
+            for file in files:
+                if file.lower().endswith((
+                    '.webp', '.jpg', '.jpeg', '.png'
+                )):
+                    file_url = (
+                        f"{base_url}/wp-content/uploads/{date_path}/{file}"
+                    )
+                    links.append(file_url)
 
         if links:
             self.output_links.setText("\n".join(links))
