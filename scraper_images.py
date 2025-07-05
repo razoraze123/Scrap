@@ -91,6 +91,22 @@ def _save_base64(encoded: str, path: Path) -> None:
     path.write_bytes(data)
 
 
+def _unique_path(folder: Path, filename: str) -> Path:
+    """Return a unique Path in *folder* for *filename*.
+
+    If a file with the same name already exists, ``_n`` is appended before the
+    extension where ``n`` increments until an unused name is found.
+    """
+
+    base, ext = os.path.splitext(filename)
+    candidate = folder / filename
+    counter = 1
+    while candidate.exists():
+        candidate = folder / f"{base}_{counter}{ext}"
+        counter += 1
+    return candidate
+
+
 def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | None:
     src = element.get_attribute("src")
     if not src:
@@ -100,9 +116,7 @@ def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | 
         header, encoded = src.split(",", 1)
         ext = header.split("/")[1].split(";")[0]
         filename = f"image_base64_{index}.{ext}"
-        target = folder / filename
-        if target.exists():
-            return None
+        target = _unique_path(folder, filename)
         _save_base64(encoded, target)
         return target
 
@@ -111,9 +125,7 @@ def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | 
 
     raw_filename = os.path.basename(src.split("?")[0])
     filename = re.sub(r"-\d+(?=\.\w+$)", "", raw_filename)
-    target = folder / filename
-    if target.exists():
-        return None
+    target = _unique_path(folder, filename)
     _download_binary(src, target, user_agent)
     return target
 
