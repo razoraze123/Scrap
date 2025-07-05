@@ -278,6 +278,29 @@ class PageScraperImages(QWidget):
         layout.addWidget(self.checkbox_preview)
 
         self.button_start = QPushButton("Scraper")
+        self.button_start.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #007BFF;
+                color: white;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 14px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+            QPushButton:pressed {
+                background-color: #003d80;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+            """
+        )
         layout.addWidget(self.button_start)
 
         self.progress = QProgressBar()
@@ -308,6 +331,19 @@ class PageScraperImages(QWidget):
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
+        self.log_view.setStyleSheet(
+            """
+            QPlainTextEdit {
+                background-color: #fdfdfd;
+                color: #222222;
+                font-family: Consolas, "Courier New", monospace;
+                font-size: 13px;
+                border: 1px solid #cccccc;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            """
+        )
         layout.addWidget(self.log_view)
         layout.addStretch()
 
@@ -381,10 +417,46 @@ class PageScrapDescription(QWidget):
         layout.addWidget(self.input_output)
 
         self.button_start = QPushButton("Extraire")
+        self.button_start.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #007BFF;
+                color: white;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 14px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+            QPushButton:pressed {
+                background-color: #003d80;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+            """
+        )
         layout.addWidget(self.button_start)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
+        self.log_view.setStyleSheet(
+            """
+            QPlainTextEdit {
+                background-color: #fdfdfd;
+                color: #222222;
+                font-family: Consolas, "Courier New", monospace;
+                font-size: 13px;
+                border: 1px solid #cccccc;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            """
+        )
         layout.addWidget(self.log_view)
         layout.addStretch()
 
