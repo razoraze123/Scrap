@@ -23,8 +23,15 @@ from PySide6.QtWidgets import (
     QFontComboBox,
     QTextEdit,
 )
-from PySide6.QtCore import QThread, Signal, Qt, QPropertyAnimation, Property
-from PySide6.QtGui import QFont, QPainter, QColor, QRect, QPixmap
+from PySide6.QtCore import (
+    QThread,
+    Signal,
+    Qt,
+    QPropertyAnimation,
+    Property,
+    QRect,
+)
+from PySide6.QtGui import QFont, QPainter, QColor, QPixmap
 
 import scrap_lien_collection
 import scraper_images
