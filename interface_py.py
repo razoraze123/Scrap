@@ -305,6 +305,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Interface Py")
 
         self.menu = QListWidget()
+        self.menu.setMaximumWidth(150)
         self.menu.addItem("Scrap Liens Collection")
         self.menu.addItem("Scraper Images")
         self.menu.addItem("Scrap Description")
