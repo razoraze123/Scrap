@@ -622,6 +622,101 @@ class PageScrapDescription(QWidget):
         self.manager.save_setting("desc_output", self.input_output.text())
 
 
+class PageLinkGenerator(QWidget):
+    """Generate image URLs for WooCommerce uploads from a local folder."""
+
+    def __init__(self, manager: SettingsManager) -> None:
+        super().__init__()
+        self.manager = manager
+        layout = QVBoxLayout(self)
+
+        self.input_base_url = QLineEdit(manager.settings.get("linkgen_base_url", "https://www.planetebob.fr"))
+        layout.addWidget(QLabel("Domaine WooCommerce"))
+        layout.addWidget(self.input_base_url)
+
+        self.input_date = QLineEdit(manager.settings.get("linkgen_date", "2025/07"))
+        layout.addWidget(QLabel("Date (format YYYY/MM)"))
+        layout.addWidget(self.input_date)
+
+        self.button_folder = QPushButton("Choisir le dossier d'images")
+        self.button_folder.clicked.connect(self.choose_folder)
+        layout.addWidget(self.button_folder)
+
+        self.output_links = QTextEdit()
+        self.output_links.setPlaceholderText("Les URLs g\u00e9n\u00e9r\u00e9es s'afficheront ici.")
+        layout.addWidget(self.output_links)
+
+        actions = QHBoxLayout()
+        self.button_generate = QPushButton("G\u00e9n\u00e9rer")
+        self.button_generate.clicked.connect(self.generate_links)
+        actions.addWidget(self.button_generate)
+
+        self.button_copy = QPushButton("Copier les liens")
+        self.button_copy.clicked.connect(self.copy_to_clipboard)
+        actions.addWidget(self.button_copy)
+
+        self.button_export = QPushButton("Exporter en .txt")
+        self.button_export.clicked.connect(self.export_to_txt)
+        actions.addWidget(self.button_export)
+
+        layout.addLayout(actions)
+        layout.addStretch()
+
+        self.folder_path = manager.settings.get("linkgen_folder", "")
+        if self.folder_path:
+            self.button_folder.setText(f"Dossier : {os.path.basename(self.folder_path)}")
+
+        for widget in [self.input_base_url, self.input_date]:
+            widget.editingFinished.connect(self.save_fields)
+
+    def choose_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "S\u00e9lectionner un dossier")
+        if folder:
+            self.folder_path = folder
+            self.button_folder.setText(f"Dossier : {os.path.basename(folder)}")
+            self.save_fields()
+
+    def generate_links(self) -> None:
+        if not self.folder_path:
+            QMessageBox.warning(self, "Erreur", "Veuillez choisir un dossier.")
+            return
+
+        base_url = self.input_base_url.text().strip().rstrip("/")
+        date_path = self.input_date.text().strip()
+
+        links: list[str] = []
+        for fname in os.listdir(self.folder_path):
+            if fname.lower().endswith((".webp", ".jpg", ".jpeg", ".png")):
+                file_url = f"{base_url}/wp-content/uploads/{date_path}/{fname}"
+                links.append(file_url)
+
+        if links:
+            self.output_links.setText("\n".join(links))
+        else:
+            self.output_links.setText("Aucune image valide trouv\u00e9e dans le dossier.")
+
+    def copy_to_clipboard(self) -> None:
+        clipboard: QClipboard = QApplication.clipboard()
+        clipboard.setText(self.output_links.toPlainText())
+        QMessageBox.information(self, "Copi\u00e9", "Les liens ont \u00e9t\u00e9 copi\u00e9s dans le presse-papiers.")
+
+    def export_to_txt(self) -> None:
+        if not self.output_links.toPlainText():
+            QMessageBox.warning(self, "Erreur", "Aucun lien \u00e0 exporter.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(self, "Enregistrer sous", "liens_images.txt", "Fichier texte (*.txt)")
+        if path:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(self.output_links.toPlainText())
+            QMessageBox.information(self, "Export\u00e9", "Les liens ont \u00e9t\u00e9 enregistr\u00e9s avec succ\u00e8s.")
+
+    def save_fields(self) -> None:
+        self.manager.save_setting("linkgen_base_url", self.input_base_url.text())
+        self.manager.save_setting("linkgen_date", self.input_date.text())
+        self.manager.save_setting("linkgen_folder", self.folder_path)
+
+
 class PageSettings(QWidget):
     """UI page allowing the user to customise the application."""
 
@@ -750,6 +845,7 @@ class MainWindow(QMainWindow):
         self.menu.addItem("Scrap Liens Collection")
         self.menu.addItem("Scraper Images")
         self.menu.addItem("Scrap Description")
+        self.menu.addItem("G\u00e9n\u00e9rateur de lien")
         self.menu.addItem("Param\u00e8tres")
 
         self.stack = QStackedWidget()
@@ -757,11 +853,13 @@ class MainWindow(QMainWindow):
         self.page_scrap = PageScrapLienCollection(settings)
         self.page_images = PageScraperImages(settings)
         self.page_desc = PageScrapDescription(settings)
+        self.page_linkgen = PageLinkGenerator(settings)
         self.page_settings = PageSettings(settings, self.apply_settings)
         self.stack.addWidget(self.page_profiles)
         self.stack.addWidget(self.page_scrap)
         self.stack.addWidget(self.page_images)
         self.stack.addWidget(self.page_desc)
+        self.stack.addWidget(self.page_linkgen)
         self.stack.addWidget(self.page_settings)
 
         self.menu.currentRowChanged.connect(self.stack.setCurrentIndex)
