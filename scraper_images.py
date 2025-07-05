@@ -16,6 +16,9 @@ import os
 import re
 import sys
 import subprocess
+import json
+import random
+import unicodedata
 from pathlib import Path
 from typing import Iterable, Callable, Optional
 import argparse
@@ -31,6 +34,12 @@ from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
 
 DEFAULT_CSS_SELECTOR = ".product-gallery__media-list img"
+
+# Path to the JSON file containing product names and ALT sentences
+ALT_JSON_PATH = Path(__file__).with_name("product_sentences.json")
+
+# Enable use of ALT sentences for renaming images by default
+USE_ALT_JSON = True
 
 
 logger = logging.getLogger(__name__)
@@ -107,6 +116,52 @@ def _unique_path(folder: Path, filename: str) -> Path:
     return candidate
 
 
+def _load_alt_sentences(path: Path = ALT_JSON_PATH) -> dict:
+    """Load and return the ALT sentences mapping from *path*."""
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        logger.warning("Impossible de charger %s : %s", path, exc)
+        return {}
+
+
+def _clean_filename(text: str) -> str:
+    """Return *text* transformed into a safe file name."""
+    normalized = unicodedata.normalize("NFD", text)
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    ascii_text = ascii_text.lower()
+    ascii_text = re.sub(r"\s+", "_", ascii_text)
+    ascii_text = re.sub(r"[^a-z0-9_-]", "", ascii_text)
+    return ascii_text
+
+
+def _rename_with_alt(path: Path, sentences: dict, warned: set[str]) -> Path:
+    """Rename *path* using ALT sentences if available."""
+
+    product_key = path.parent.name.replace("_", " ")
+    phrase_list = sentences.get(product_key)
+    if not phrase_list:
+        if product_key not in warned:
+            logger.warning(
+                "Cle '%s' absente de product_sentences.json, pas de renommage", product_key
+            )
+            warned.add(product_key)
+        return path
+
+    alt_phrase = random.choice(phrase_list)
+    filename = _clean_filename(alt_phrase) + path.suffix
+    target = path.parent / filename
+    if target != path and target.exists():
+        target = _unique_path(path.parent, filename)
+    try:
+        path.rename(target)
+    except OSError as exc:
+        logger.warning("Echec du renommage %s -> %s : %s", path, target, exc)
+        return path
+    return target
+
+
 def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | None:
     src = element.get_attribute("src")
     if not src:
@@ -168,6 +223,7 @@ def download_images(
     parent_dir: Path | str = "images",
     progress_callback: Optional[Callable[[int, int], None]] = None,
     user_agent: str = USER_AGENT,
+    use_alt_json: bool = USE_ALT_JSON,
 ) -> dict:
     """Download all images from *url* and return folder and first image."""
     if not url.lower().startswith(("http://", "https://")):
@@ -180,6 +236,9 @@ def download_images(
     first_image: Path | None = None
     downloaded = 0
     skipped = 0
+
+    sentences = _load_alt_sentences() if use_alt_json else {}
+    warned_missing: set[str] = set()
 
     try:
         logger.info("\U0001F30D Chargement de la page...")
@@ -203,6 +262,8 @@ def download_images(
             try:
                 saved = _handle_image(img, folder, idx, user_agent)
                 if saved:
+                    if use_alt_json:
+                        saved = _rename_with_alt(saved, sentences, warned_missing)
                     downloaded += 1
                     if first_image is None:
                         first_image = saved
@@ -264,11 +325,21 @@ def main() -> None:
         help="User-Agent à utiliser pour les requêtes (defaut: %(default)s)",
     )
     parser.add_argument(
+        "--use-alt-json",
+        dest="use_alt_json",
+        action="store_true" if not USE_ALT_JSON else "store_false",
+        help=(
+            "Activer" if not USE_ALT_JSON else "Désactiver"
+        )
+        + " le renommage via product_sentences.json",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Niveau de logging (defaut: %(default)s)",
     )
+    parser.set_defaults(use_alt_json=USE_ALT_JSON)
     args = parser.parse_args()
 
     if args.url and args.urls:
@@ -299,6 +370,7 @@ def main() -> None:
                 css_selector=args.selector,
                 parent_dir=args.parent_dir,
                 user_agent=args.user_agent,
+                use_alt_json=args.use_alt_json,
             )
             if args.preview:
                 _open_folder(info["folder"])
