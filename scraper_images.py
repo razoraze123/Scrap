@@ -91,10 +91,10 @@ def _save_base64(encoded: str, path: Path) -> None:
     path.write_bytes(data)
 
 
-def _handle_image(element, folder: Path, index: int, user_agent: str) -> bool:
+def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | None:
     src = element.get_attribute("src")
     if not src:
-        return False
+        return None
 
     if src.startswith("data:image"):
         header, encoded = src.split(",", 1)
@@ -102,9 +102,9 @@ def _handle_image(element, folder: Path, index: int, user_agent: str) -> bool:
         filename = f"image_base64_{index}.{ext}"
         target = folder / filename
         if target.exists():
-            return False
+            return None
         _save_base64(encoded, target)
-        return True
+        return target
 
     if src.startswith("//"):
         src = "https:" + src
@@ -112,9 +112,9 @@ def _handle_image(element, folder: Path, index: int, user_agent: str) -> bool:
     filename = os.path.basename(src.split("?")[0])
     target = folder / filename
     if target.exists():
-        return False
+        return None
     _download_binary(src, target, user_agent)
-    return True
+    return target
 
 
 def _find_product_name(driver: webdriver.Chrome) -> str:
@@ -155,7 +155,8 @@ def download_images(
     parent_dir: Path | str = "images",
     progress_callback: Optional[Callable[[int, int], None]] = None,
     user_agent: str = USER_AGENT,
-) -> Path:
+) -> dict:
+    """Download all images from *url* and return folder and first image."""
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
 
@@ -163,6 +164,7 @@ def download_images(
 
     product_name = ""
     folder = Path()
+    first_image: Path | None = None
     downloaded = 0
     skipped = 0
 
@@ -186,8 +188,11 @@ def download_images(
             tqdm(img_elements, desc="\U0001F53D Téléchargement des images"), start=1
         ):
             try:
-                if _handle_image(img, folder, idx, user_agent):
+                saved = _handle_image(img, folder, idx, user_agent)
+                if saved:
                     downloaded += 1
+                    if first_image is None:
+                        first_image = saved
                 else:
                     skipped += 1
                 WebDriverWait(driver, 5).until(lambda d: img.get_attribute("src"))
@@ -205,7 +210,7 @@ def download_images(
     logger.info("\u27A1️ Ignorées     : %s", skipped)
     logger.info("-" * 50)
 
-    return folder
+    return {"folder": folder, "first_image": first_image}
 
 
 def main() -> None:
@@ -276,14 +281,14 @@ def main() -> None:
 
     for url in urls_list:
         try:
-            folder = download_images(
+            info = download_images(
                 url,
                 css_selector=args.selector,
                 parent_dir=args.parent_dir,
                 user_agent=args.user_agent,
             )
             if args.preview:
-                _open_folder(folder)
+                _open_folder(info["folder"])
         except ValueError as exc:
             logger.error("Erreur : %s", exc)
 
