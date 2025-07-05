@@ -26,6 +26,10 @@ DEFAULT_SETTINGS = {
     "desc_url": "",
     "desc_selector": "",
     "desc_output": "description.html",
+
+    "linkgen_base_url": "https://www.planetebob.fr",
+    "linkgen_date": "2025/07",
+    "linkgen_folder": "",
 }
 
 
