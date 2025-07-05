@@ -430,8 +430,10 @@ class PageSettings(QWidget):
             self.spin_font_size,
             self.checkbox_anim,
         ]:
-            if isinstance(w, (QLineEdit, QComboBox)):
+            if isinstance(w, QLineEdit):
                 w.editingFinished.connect(self.update_settings)
+            elif isinstance(w, QComboBox):
+                w.currentIndexChanged.connect(self.update_settings)
             elif isinstance(w, QSpinBox):
                 w.valueChanged.connect(self.update_settings)
             elif isinstance(w, QCheckBox):
