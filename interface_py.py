@@ -254,6 +254,14 @@ class PageProfiles(QWidget):
         layout.addWidget(QLabel("Fichier ALT JSON"))
         layout.addWidget(self.input_alt_json)
 
+        self.input_urls_images = QLineEdit()
+        layout.addWidget(QLabel("Fichier URLs Images"))
+        layout.addWidget(self.input_urls_images)
+
+        self.input_urls_desc = QLineEdit()
+        layout.addWidget(QLabel("Fichier URLs Description"))
+        layout.addWidget(self.input_urls_desc)
+
         self.checkbox_auto = QCheckBox("Appliquer automatiquement après chargement")
         layout.addWidget(self.checkbox_auto)
 
@@ -305,6 +313,8 @@ class PageProfiles(QWidget):
         self.input_desc.setText(selectors.get("description", ""))
         self.input_collection.setText(selectors.get("collection", ""))
         self.input_alt_json.setText(data.get("sentences_file", ""))
+        self.input_urls_images.setText(data.get("urls_file", ""))
+        self.input_urls_desc.setText(data.get("desc_urls_file", ""))
 
     def new_profile(self) -> None:
         self.input_name.clear()
@@ -312,6 +322,8 @@ class PageProfiles(QWidget):
         self.input_desc.clear()
         self.input_collection.clear()
         self.input_alt_json.clear()
+        self.input_urls_images.clear()
+        self.input_urls_desc.clear()
 
     def save_profile(self) -> None:
         name = self.input_name.text().strip()
@@ -325,6 +337,8 @@ class PageProfiles(QWidget):
                 "collection": self.input_collection.text().strip(),
             },
             "sentences_file": self.input_alt_json.text().strip(),
+            "urls_file": self.input_urls_images.text().strip(),
+            "desc_urls_file": self.input_urls_desc.text().strip(),
         }
         path = self.profile_path(name)
         self.profile_manager.save_profile(path, data)

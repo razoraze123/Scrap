@@ -37,9 +37,17 @@ class SiteProfileManager:
             main_window.page_images.input_alt_json.setText(
                 profile.get("sentences_file", "")
             )
+        if hasattr(main_window.page_images, "input_urls_file"):
+            main_window.page_images.input_urls_file.setText(
+                profile.get("urls_file", "")
+            )
         if hasattr(main_window.page_desc, "input_selector"):
             main_window.page_desc.input_selector.setText(
                 selectors.get("description", "")
+            )
+        if hasattr(main_window.page_desc, "input_urls_file"):
+            main_window.page_desc.input_urls_file.setText(
+                profile.get("desc_urls_file", "")
             )
         if hasattr(main_window.page_scrap, "input_selector"):
             main_window.page_scrap.input_selector.setText(
