@@ -103,3 +103,22 @@ def test_download_images_datasrc_progress(tmp_path, monkeypatch):
     )
 
     assert calls == [(1, 1)]
+
+
+def test_load_alt_sentences_cache(tmp_path, monkeypatch):
+    path = tmp_path / "sentences.json"
+    path.write_text("{}", encoding="utf-8")
+
+    calls = []
+
+    def fake_load(fh):
+        calls.append(1)
+        return {}
+
+    monkeypatch.setattr(si.json, "load", fake_load)
+    si._ALT_SENTENCES_CACHE.clear()
+
+    si._load_alt_sentences(path)
+    si._load_alt_sentences(path)
+
+    assert calls == [1]
