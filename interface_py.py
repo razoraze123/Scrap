@@ -2,6 +2,7 @@ import sys
 import logging
 import io
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -546,6 +547,9 @@ class PageScraperImages(QWidget):
         self.button_start = QPushButton("Scraper")
         layout.addWidget(self.button_start)
 
+        self.button_delete = QPushButton("Supprimer dossiers")
+        layout.addWidget(self.button_delete)
+
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         layout.addWidget(self.progress)
@@ -570,6 +574,7 @@ class PageScraperImages(QWidget):
         self.worker: ScraperImagesWorker | None = None
 
         self.button_start.clicked.connect(self.start_worker)
+        self.button_delete.clicked.connect(self.delete_folders)
 
         for widget in [
             self.input_source,
@@ -668,6 +673,28 @@ class PageScraperImages(QWidget):
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
         self.label_timer.setText("Temps restant : 0 seconde(s)")
+        QMessageBox.information(self, "Terminé", "Le téléchargement des images est terminé.")
+
+    def delete_folders(self) -> None:
+        dest = Path(self.input_dest.text().strip() or "images")
+        if not dest.exists():
+            QMessageBox.information(self, "Info", "Le dossier spécifié n'existe pas.")
+            return
+        reply = QMessageBox.question(
+            self,
+            "Confirmer la suppression",
+            f"Supprimer tout le contenu de {dest} ?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            for child in dest.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child)
+            QMessageBox.information(self, "Supprimé", "Les dossiers ont été supprimés.")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Erreur", f"Erreur lors de la suppression : {exc}")
 
     def save_fields(self) -> None:
         self.manager.save_setting("images_url", self.input_source.text())
