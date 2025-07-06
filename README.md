@@ -37,5 +37,15 @@ Installez les bibliothèques nécessaires avec :
 pip install -r requirements.txt
 ```
 
+🔧 Configuration
+
+Lors de la première utilisation, copiez `settings.example.json` en `settings.json` :
+
+```bash
+cp settings.example.json settings.json
+```
+
+Personnalisez ensuite `settings.json` selon vos besoins. Ce fichier est ignoré par Git pour ne pas partager vos réglages personnels.
+
 🗒️ Suivi des audits
 Les rapports d'audit sont enregistrés dans `compte_rendu.txt`. Mettez ce fichier à jour à chaque nouvel audit. Pour consulter les derniers résultats, ouvrez `compte_rendu.txt` ou exécutez `cat compte_rendu.txt` dans votre terminal.
