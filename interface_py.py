@@ -3,6 +3,7 @@ import logging
 import io
 import os
 import subprocess
+import time
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -435,6 +436,10 @@ class PageScrapLienCollection(QWidget):
         layout.addWidget(self.button_start)
         self.button_start.clicked.connect(self.start_worker)
 
+        self.button_toggle_console = QPushButton("Masquer la console")
+        self.button_toggle_console.clicked.connect(self.toggle_console)
+        layout.addWidget(self.button_toggle_console)
+
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
@@ -469,6 +474,13 @@ class PageScrapLienCollection(QWidget):
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
+
+    def toggle_console(self) -> None:
+        visible = self.log_view.isVisible()
+        self.log_view.setVisible(not visible)
+        self.button_toggle_console.setText(
+            "Afficher la console" if visible else "Masquer la console"
+        )
 
     def save_fields(self) -> None:
         self.manager.save_setting("scrap_lien_url", self.input_url.text())
@@ -538,10 +550,17 @@ class PageScraperImages(QWidget):
         self.progress.setRange(0, 100)
         layout.addWidget(self.progress)
 
+        self.label_timer = QLabel("Temps restant : ...")
+        layout.addWidget(self.label_timer)
+
         self.label_preview = QLabel(alignment=Qt.AlignCenter)
         self.label_preview.setVisible(False)
         self.switch_preview.toggled.connect(self.label_preview.setVisible)
         layout.addWidget(self.label_preview)
+
+        self.button_toggle_console = QPushButton("Masquer la console")
+        self.button_toggle_console.clicked.connect(self.toggle_console)
+        layout.addWidget(self.button_toggle_console)
 
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
@@ -601,11 +620,12 @@ class PageScraperImages(QWidget):
             alt_json,
         )
         self.worker.log.connect(self.log_view.appendPlainText)
-        self.worker.progress.connect(self.progress.setValue)
+        self.worker.progress.connect(self.update_progress)
         self.worker.preview_path.connect(self.display_preview)
         self.worker.finished.connect(self.on_finished)
         self.label_preview.clear()
         self.label_preview.setVisible(False)
+        self.start_time = time.perf_counter()
         self.worker.start()
 
     def browse_file(self) -> None:
@@ -620,8 +640,26 @@ class PageScraperImages(QWidget):
             self.input_dest.setText(directory)
             self.save_fields()
 
+    def update_progress(self, value: int) -> None:
+        self.progress.setValue(value)
+        if value == 0:
+            self.label_timer.setText("Temps restant : ...")
+            return
+        elapsed = time.perf_counter() - self.start_time
+        remaining = elapsed * (100 - value) / value
+        minutes = int(remaining / 60 + 0.5)
+        self.label_timer.setText(f"Temps restant : {minutes} minute(s)")
+
+    def toggle_console(self) -> None:
+        visible = self.log_view.isVisible()
+        self.log_view.setVisible(not visible)
+        self.button_toggle_console.setText(
+            "Afficher la console" if visible else "Masquer la console"
+        )
+
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
+        self.label_timer.setText("Temps restant : 0 minute(s)")
 
     def save_fields(self) -> None:
         self.manager.save_setting("images_url", self.input_source.text())
@@ -667,6 +705,10 @@ class PageScrapDescription(QWidget):
         self.button_start = QPushButton("Extraire")
         layout.addWidget(self.button_start)
 
+        self.button_toggle_console = QPushButton("Masquer la console")
+        self.button_toggle_console.clicked.connect(self.toggle_console)
+        layout.addWidget(self.button_toggle_console)
+
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         layout.addWidget(self.log_view)
@@ -699,6 +741,13 @@ class PageScrapDescription(QWidget):
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
+
+    def toggle_console(self) -> None:
+        visible = self.log_view.isVisible()
+        self.log_view.setVisible(not visible)
+        self.button_toggle_console.setText(
+            "Afficher la console" if visible else "Masquer la console"
+        )
 
     def save_fields(self) -> None:
         self.manager.save_setting("desc_url", self.input_url.text())
