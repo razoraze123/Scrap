@@ -25,20 +25,17 @@ class ElementURL:
 
 def test_handle_image_base64(tmp_path):
     elem = ElementBase64()
-    path = si._handle_image(elem, tmp_path, 1, "UA")
+    path, url = si._handle_image(elem, tmp_path, 1, "UA")
     assert path.exists()
+    assert url is None
     assert path.read_bytes() == b"hello"
 
 
-def test_handle_image_url(tmp_path, monkeypatch):
+def test_handle_image_url(tmp_path):
     elem = ElementURL()
-
-    def fake_download(url, dest, ua):
-        dest.write_bytes(b"data")
-
-    monkeypatch.setattr(si, "_download_binary", fake_download)
-    path = si._handle_image(elem, tmp_path, 1, "UA")
-    assert path.exists()
+    path, url = si._handle_image(elem, tmp_path, 1, "UA")
+    assert not path.exists()
+    assert url == "https://example.com/img/test.png?x=1"
     assert path.name == "test.png"
 
 
@@ -94,7 +91,7 @@ def test_download_images_datasrc_progress(tmp_path, monkeypatch):
 
     calls = []
 
-    si.download_images(
+    res = si.download_images(
         "http://example.com",
         css_selector="img",
         parent_dir=tmp_path,
@@ -103,6 +100,38 @@ def test_download_images_datasrc_progress(tmp_path, monkeypatch):
     )
 
     assert calls == [(1, 1)]
+    files = list(res["folder"].iterdir())
+    assert len(files) == 1
+
+
+def test_download_images_parallel(tmp_path, monkeypatch):
+    elems = [ElementDataSrc(), ElementDataSrc()]
+    driver = DummyDriver(elems)
+
+    monkeypatch.setattr(si, "WebDriverWait", DummyWait)
+    monkeypatch.setattr(si, "EC", DummyEC)
+    monkeypatch.setattr("driver_utils.setup_driver", lambda: driver)
+    monkeypatch.setattr(si, "setup_driver", lambda: driver)
+    monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
+
+    def fake_download(url, dest, ua):
+        dest.write_bytes(b"img")
+
+    monkeypatch.setattr(si, "_download_binary", fake_download)
+
+    calls = []
+
+    res = si.download_images(
+        "http://example.com",
+        css_selector="img",
+        parent_dir=tmp_path,
+        progress_callback=lambda i, t: calls.append((i, t)),
+        use_alt_json=False,
+        max_threads=2,
+    )
+
+    assert sorted(calls) == [(1, 2), (2, 2)]
+    assert len(list(res["folder"].iterdir())) == 2
 
 
 def test_load_alt_sentences_cache(tmp_path, monkeypatch):
