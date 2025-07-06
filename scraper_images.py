@@ -21,6 +21,7 @@ import random
 import unicodedata
 from pathlib import Path
 from typing import Iterable, Callable, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import argparse
 
 import requests
@@ -171,7 +172,9 @@ def _rename_with_alt(path: Path, sentences: dict, warned: set[str]) -> Path:
     return target
 
 
-def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | None:
+def _handle_image(
+    element, folder: Path, index: int, user_agent: str
+) -> tuple[Path, str | None]:
     src = (
         element.get_attribute("src")
         or element.get_attribute("data-src")
@@ -193,7 +196,7 @@ def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | 
         filename = f"image_base64_{index}.{ext}"
         target = _unique_path(folder, filename)
         _save_base64(encoded, target)
-        return target
+        return target, None
 
     if src.startswith("//"):
         src = "https:" + src
@@ -201,8 +204,7 @@ def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | 
     raw_filename = os.path.basename(src.split("?")[0])
     filename = re.sub(r"-\d+(?=\.\w+$)", "", raw_filename)
     target = _unique_path(folder, filename)
-    _download_binary(src, target, user_agent)
-    return target
+    return target, src
 
 
 def _find_product_name(driver: webdriver.Chrome) -> str:
@@ -246,6 +248,7 @@ def download_images(
     use_alt_json: bool = USE_ALT_JSON,
     *,
     alt_json_path: str | Path | None = None,
+    max_threads: int = 4,
 ) -> dict:
     """Download all images from *url* and return folder and first image."""
     if not url.lower().startswith(("http://", "https://")):
@@ -282,28 +285,50 @@ def download_images(
         )
 
         total = len(img_elements)
-        for idx, img in enumerate(
-            tqdm(img_elements, desc="\U0001F53D Téléchargement des images"), start=1
-        ):
-            try:
-                saved = _handle_image(img, folder, idx, user_agent)
-                if saved:
+        pbar = tqdm(range(total), desc="\U0001F53D Téléchargement des images")
+        pbar_update = getattr(pbar, "update", lambda n=1: None)
+        pbar_close = getattr(pbar, "close", lambda: None)
+        futures: dict = {}
+
+        with ThreadPoolExecutor(max_workers=max_threads) as executor:
+            for idx, img in enumerate(img_elements, start=1):
+                try:
+                    path, url_to_download = _handle_image(img, folder, idx, user_agent)
+                    WebDriverWait(driver, 5).until(
+                        lambda d: img.get_attribute("src")
+                        or img.get_attribute("data-src")
+                        or img.get_attribute("data-srcset")
+                    )
+                    if url_to_download is None:
+                        if use_alt_json:
+                            path = _rename_with_alt(path, sentences, warned_missing)
+                        downloaded += 1
+                        if first_image is None:
+                            first_image = path
+                        pbar_update(1)
+                        if progress_callback:
+                            progress_callback(idx, total)
+                    else:
+                        fut = executor.submit(_download_binary, url_to_download, path, user_agent)
+                        futures[fut] = (idx, path)
+                except Exception as exc:
+                    logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
+            for fut in as_completed(futures):
+                idx, path = futures[fut]
+                try:
+                    fut.result()
                     if use_alt_json:
-                        saved = _rename_with_alt(saved, sentences, warned_missing)
+                        path = _rename_with_alt(path, sentences, warned_missing)
                     downloaded += 1
                     if first_image is None:
-                        first_image = saved
-                else:
+                        first_image = path
+                except Exception as exc:
+                    logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
                     skipped += 1
-                WebDriverWait(driver, 5).until(
-                    lambda d: img.get_attribute("src")
-                    or img.get_attribute("data-src")
-                    or img.get_attribute("data-srcset")
-                )
+                pbar_update(1)
                 if progress_callback:
                     progress_callback(idx, total)
-            except Exception as exc:
-                logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
+        pbar_close()
     finally:
         driver.quit()
 
