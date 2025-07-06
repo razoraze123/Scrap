@@ -460,9 +460,13 @@ class PageScraperImages(QWidget):
         self.input_options.hide()
         label_options.hide()
 
-        self.input_alt_json = QLineEdit(manager.settings.get("images_alt_json", "product_sentences.json"))
-        layout.addWidget(QLabel("Fichier ALT JSON"))
-        layout.addWidget(self.input_alt_json)
+        self.input_alt_json = QLineEdit(
+            manager.settings.get("images_alt_json", "product_sentences.json")
+        )
+        # Champ géré via l'onglet Profils – non ajouté au layout
+        label_alt_json = QLabel("Fichier ALT JSON")
+        self.input_alt_json.hide()
+        label_alt_json.hide()
 
         self.checkbox_preview = QCheckBox("Afficher le dossier après téléchargement")
         self.switch_preview = ToggleSwitch()
