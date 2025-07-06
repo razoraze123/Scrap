@@ -163,9 +163,20 @@ def _rename_with_alt(path: Path, sentences: dict, warned: set[str]) -> Path:
 
 
 def _handle_image(element, folder: Path, index: int, user_agent: str) -> Path | None:
-    src = element.get_attribute("src")
+    src = (
+        element.get_attribute("src")
+        or element.get_attribute("data-src")
+        or element.get_attribute("data-srcset")
+    )
+
     if not src:
-        return None
+        raise RuntimeError("Aucun attribut src / data-src trouvé pour l'image")
+
+    if " " in src and "," in src:
+        candidates = [s.strip().split(" ")[0] for s in src.split(",")]
+        src = candidates[-1]
+
+    logger.debug(f"Téléchargement de l'image : {src}")
 
     if src.startswith("data:image"):
         header, encoded = src.split(",", 1)
