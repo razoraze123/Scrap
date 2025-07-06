@@ -17,12 +17,11 @@ from pathlib import Path
 from urllib.parse import urljoin
 
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
+
+from driver_utils import setup_driver
 
 # Default CSS selector used to locate product links in the collection page
 DEFAULT_SELECTOR = "div.product-card__info h3.product-card__title a"
@@ -30,26 +29,6 @@ DEFAULT_SELECTOR = "div.product-card__info h3.product-card__title a"
 DEFAULT_NEXT_SELECTOR = "a[rel=\"next\"]"
 
 
-def _setup_driver() -> webdriver.Chrome:
-    """Return a headless Chrome WebDriver."""
-
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-logging")
-    options.add_argument("--log-level=3")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    options.add_argument("--disable-blink-features=AutomationControlled")
-
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-
-    # Hide webdriver flag
-    driver.execute_cdp_cmd(
-        "Page.addScriptToEvaluateOnNewDocument",
-        {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
-    )
-    return driver
 
 
 def _random_sleep(min_s: float = 1.0, max_s: float = 2.5) -> None:
@@ -69,7 +48,7 @@ def scrape_collection(
     ``next_selector`` is used to detect the button leading to the next page.
     """
 
-    driver = _setup_driver()
+    driver = setup_driver()
     results: list[dict[str, str]] = []
 
     try:

@@ -25,13 +25,12 @@ import argparse
 
 import requests
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from tqdm import tqdm
-from webdriver_manager.chrome import ChromeDriverManager
+
+from driver_utils import setup_driver
 
 DEFAULT_CSS_SELECTOR = ".product-gallery__media-list img"
 
@@ -43,15 +42,6 @@ USE_ALT_JSON = True
 
 
 logger = logging.getLogger(__name__)
-
-
-def _setup_driver() -> webdriver.Chrome:
-    """Return a headless Chrome WebDriver."""
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-logging")
-    options.add_argument("--log-level=3")
-    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 
 def _safe_folder(product_name: str, base_dir: Path | str = "images") -> Path:
@@ -242,7 +232,7 @@ def download_images(
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
 
-    driver = _setup_driver()
+    driver = setup_driver()
 
     product_name = ""
     folder = Path()

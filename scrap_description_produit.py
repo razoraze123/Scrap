@@ -9,29 +9,14 @@ from pathlib import Path
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+
+from driver_utils import setup_driver
 
 DEFAULT_SELECTOR = ".rte"
 
 
-def _setup_driver() -> webdriver.Chrome:
-    """Return a configured headless Chrome WebDriver."""
-    options = Options()
-    options.add_argument("--headless")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    options.add_argument("--disable-blink-features=AutomationControlled")
-
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    driver.execute_cdp_cmd(
-        "Page.addScriptToEvaluateOnNewDocument",
-        {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
-    )
-    return driver
 
 
 def extract_html_description(url: str, css_selector: str = DEFAULT_SELECTOR) -> str:
@@ -39,7 +24,7 @@ def extract_html_description(url: str, css_selector: str = DEFAULT_SELECTOR) -> 
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
 
-    driver = _setup_driver()
+    driver = setup_driver()
     try:
         driver.get(url)
         WebDriverWait(driver, 10).until(
