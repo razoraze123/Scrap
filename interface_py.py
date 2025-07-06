@@ -647,8 +647,16 @@ class PageScraperImages(QWidget):
             return
         elapsed = time.perf_counter() - self.start_time
         remaining = elapsed * (100 - value) / value
-        minutes = int(remaining / 60 + 0.5)
-        self.label_timer.setText(f"Temps restant : {minutes} minute(s)")
+        if remaining >= 60:
+            minutes = int(remaining / 60 + 0.5)
+            self.label_timer.setText(
+                f"Temps restant : {minutes} minute(s)"
+            )
+        else:
+            seconds = int(remaining + 0.5)
+            self.label_timer.setText(
+                f"Temps restant : {seconds} seconde(s)"
+            )
 
     def toggle_console(self) -> None:
         visible = self.log_view.isVisible()
@@ -659,7 +667,7 @@ class PageScraperImages(QWidget):
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
-        self.label_timer.setText("Temps restant : 0 minute(s)")
+        self.label_timer.setText("Temps restant : 0 seconde(s)")
 
     def save_fields(self) -> None:
         self.manager.save_setting("images_url", self.input_source.text())
