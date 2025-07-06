@@ -276,7 +276,11 @@ def download_images(
                         first_image = saved
                 else:
                     skipped += 1
-                WebDriverWait(driver, 5).until(lambda d: img.get_attribute("src"))
+                WebDriverWait(driver, 5).until(
+                    lambda d: img.get_attribute("src")
+                    or img.get_attribute("data-src")
+                    or img.get_attribute("data-srcset")
+                )
                 if progress_callback:
                     progress_callback(idx, total)
             except Exception as exc:
