@@ -865,6 +865,10 @@ class PageSettings(QWidget):
         self.checkbox_anim.setChecked(manager.settings["animations"])
         layout.addWidget(self.checkbox_anim)
 
+        self.checkbox_update = QCheckBox("Autoriser la mise à jour (git pull)")
+        self.checkbox_update.setChecked(manager.settings.get("enable_update", True))
+        layout.addWidget(self.checkbox_update)
+
         self.button_reset = QPushButton("R\u00e9initialiser les param\u00e8tres")
         layout.addWidget(self.button_reset)
 
@@ -883,6 +887,7 @@ class PageSettings(QWidget):
             self.font_combo,
             self.spin_font_size,
             self.checkbox_anim,
+            self.checkbox_update,
         ]:
             if isinstance(w, QLineEdit):
                 w.editingFinished.connect(self.update_settings)
@@ -909,6 +914,7 @@ class PageSettings(QWidget):
         s["font_family"] = self.font_combo.currentFont().family()
         s["font_size"] = self.spin_font_size.value()
         s["animations"] = self.checkbox_anim.isChecked()
+        s["enable_update"] = self.checkbox_update.isChecked()
         self.manager.save()
         self.apply_cb()
 
@@ -923,11 +929,29 @@ class PageSettings(QWidget):
         self.font_combo.setCurrentFont(QFont(self.manager.settings["font_family"]))
         self.spin_font_size.setValue(self.manager.settings["font_size"])
         self.checkbox_anim.setChecked(self.manager.settings["animations"])
+        self.checkbox_update.setChecked(self.manager.settings.get("enable_update", True))
         self.manager.save()
         self.apply_cb()
 
     def update_and_restart(self) -> None:
-        """Run git pull and restart the application if successful."""
+        """Run git pull after confirmation and restart the app if successful."""
+        if not self.manager.settings.get("enable_update", True):
+            QMessageBox.information(
+                self,
+                "Mise \u00e0 jour d\u00e9sactiv\u00e9e",
+                "La mise \u00e0 jour par git pull est d\u00e9sactiv\u00e9e dans les param\u00e8tres.",
+            )
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Confirmer la mise \u00e0 jour",
+            "Ex\u00e9cuter 'git pull' puis red\u00e9marrer l'application ?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
         try:
             output = subprocess.check_output(
                 ["git", "pull", "origin", "main"],
@@ -942,10 +966,14 @@ class PageSettings(QWidget):
             )
             return
         except subprocess.CalledProcessError as exc:
+            msg = exc.output or str(exc)
+            low = msg.lower()
+            if "unable to access" in low or "could not resolve host" in low:
+                msg = f"Erreur r\u00e9seau lors de la mise \u00e0 jour :\n{msg}"
             QMessageBox.critical(
                 self,
                 "Erreur lors de la mise \u00e0 jour",
-                exc.output or str(exc),
+                msg,
             )
             return
 
