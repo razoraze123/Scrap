@@ -4,3 +4,4 @@ tqdm
 requests
 beautifulsoup4
 PySide6
+pytest
