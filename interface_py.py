@@ -250,9 +250,14 @@ class PageProfiles(QWidget):
         layout.addWidget(QLabel("Sélecteur Collection"))
         layout.addWidget(self.input_collection)
 
+        alt_json_layout = QHBoxLayout()
         self.input_alt_json = QLineEdit()
+        alt_json_layout.addWidget(self.input_alt_json)
+        self.button_alt_json = QPushButton("\U0001F4C1 Choisir un fichier json")
+        self.button_alt_json.clicked.connect(self.browse_alt_json)
+        alt_json_layout.addWidget(self.button_alt_json)
         layout.addWidget(QLabel("Fichier ALT JSON"))
-        layout.addWidget(self.input_alt_json)
+        layout.addLayout(alt_json_layout)
 
         file_urls_layout = QHBoxLayout()
         self.input_urls_images = QLineEdit()
@@ -263,9 +268,14 @@ class PageProfiles(QWidget):
         layout.addWidget(QLabel("Fichier URLs Images"))
         layout.addLayout(file_urls_layout)
 
+        urls_desc_layout = QHBoxLayout()
         self.input_urls_desc = QLineEdit()
+        urls_desc_layout.addWidget(self.input_urls_desc)
+        self.button_urls_desc = QPushButton("\U0001F4C1 Choisir un fichier txt")
+        self.button_urls_desc.clicked.connect(self.browse_urls_desc)
+        urls_desc_layout.addWidget(self.button_urls_desc)
         layout.addWidget(QLabel("Fichier URLs Description"))
-        layout.addWidget(self.input_urls_desc)
+        layout.addLayout(urls_desc_layout)
 
         self.checkbox_auto = QCheckBox("Appliquer automatiquement après chargement")
         layout.addWidget(self.checkbox_auto)
@@ -374,6 +384,20 @@ class PageProfiles(QWidget):
         )
         if file_path:
             self.input_urls_images.setText(file_path)
+
+    def browse_urls_desc(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Sélectionner un fichier", "", "Text Files (*.txt)"
+        )
+        if file_path:
+            self.input_urls_desc.setText(file_path)
+
+    def browse_alt_json(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Sélectionner un fichier", "", "JSON Files (*.json);;All Files (*)"
+        )
+        if file_path:
+            self.input_alt_json.setText(file_path)
 
 
 class PageScrapLienCollection(QWidget):
