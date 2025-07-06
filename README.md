@@ -49,3 +49,9 @@ Personnalisez ensuite `settings.json` selon vos besoins. Ce fichier est ignoré 
 
 🗒️ Suivi des audits
 Les rapports d'audit sont enregistrés dans `compte_rendu.txt`. Mettez ce fichier à jour à chaque nouvel audit. Pour consulter les derniers résultats, ouvrez `compte_rendu.txt` ou exécutez `cat compte_rendu.txt` dans votre terminal.
+
+🧪 Tests unitaires
+Après installation des dépendances, lancez simplement :
+```bash
+pytest
+```
