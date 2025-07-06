@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Callable
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -142,7 +143,7 @@ class ScraperImagesWorker(QThread):
     """Background worker to download images using scraper_images."""
 
     log = Signal(str)
-    progress = Signal(int)
+    progress = Signal(int, int)
     finished = Signal()
     preview_path = Signal(str)
 
@@ -163,20 +164,31 @@ class ScraperImagesWorker(QThread):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         try:
-            total_urls = len(self.urls)
+            images_done = 0
+            total_images = 0
 
-            def make_cb(url_index: int):
-                return lambda i, t: self.progress.emit(
-                    int(((url_index + i / t) / total_urls) * 100)
-                )
+            def make_cb() -> Callable[[int, int], None]:
+                first = True
+
+                def cb(i: int, t: int) -> None:
+                    nonlocal first, images_done, total_images
+                    if first:
+                        total_images += t
+                        first = False
+                    images_done += 1
+                    self.progress.emit(images_done, total_images)
+
+                return cb
+
+            self.progress.emit(0, 0)
 
             preview_sent = False
-            for idx, url in enumerate(self.urls):
+            for url in self.urls:
                 info = scraper_images.download_images(
                     url,
                     css_selector=self.selector,
                     parent_dir=self.parent_dir,
-                    progress_callback=make_cb(idx),
+                    progress_callback=make_cb(),
                     alt_json_path=self.alt_json,
                 )
                 folder = info["folder"]
@@ -557,6 +569,9 @@ class PageScraperImages(QWidget):
         self.label_timer = QLabel("Temps restant : ...")
         layout.addWidget(self.label_timer)
 
+        self.images_done = 0
+        self.total_images = 0
+
         self.label_preview = QLabel(alignment=Qt.AlignCenter)
         self.label_preview.setVisible(False)
         self.switch_preview.toggled.connect(self.label_preview.setVisible)
@@ -630,6 +645,8 @@ class PageScraperImages(QWidget):
         self.worker.finished.connect(self.on_finished)
         self.label_preview.clear()
         self.label_preview.setVisible(False)
+        self.images_done = 0
+        self.total_images = 0
         self.start_time = time.perf_counter()
         self.worker.start()
 
@@ -645,13 +662,17 @@ class PageScraperImages(QWidget):
             self.input_dest.setText(directory)
             self.save_fields()
 
-    def update_progress(self, value: int) -> None:
+    def update_progress(self, done: int, total: int) -> None:
+        self.images_done = done
+        self.total_images = total
+        value = int(done / total * 100) if total else 0
         self.progress.setValue(value)
-        if value == 0:
+        if done == 0 or total == 0:
             self.label_timer.setText("Temps restant : ...")
             return
         elapsed = time.perf_counter() - self.start_time
-        remaining = elapsed * (100 - value) / value
+        average = elapsed / done
+        remaining = (total - done) * average
         if remaining >= 60:
             minutes = int(remaining / 60 + 0.5)
             self.label_timer.setText(
