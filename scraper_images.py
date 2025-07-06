@@ -106,14 +106,33 @@ def _unique_path(folder: Path, filename: str) -> Path:
     return candidate
 
 
+# Cache for the ALT sentences loaded from JSON
+_ALT_SENTENCES_CACHE: dict[Path, dict] = {}
+
+
 def _load_alt_sentences(path: Path = ALT_JSON_PATH) -> dict:
-    """Load and return the ALT sentences mapping from *path*."""
+    """Load and return the ALT sentences mapping from *path*.
+
+    The file is read only the first time for a given *path* and the result
+    is cached for subsequent calls. If reading fails, an empty dictionary is
+    cached and returned.
+    """
+    global _ALT_SENTENCES_CACHE
+
+    path = Path(path)
+    cached = _ALT_SENTENCES_CACHE.get(path)
+    if cached is not None:
+        return cached
+
     try:
         with path.open("r", encoding="utf-8") as fh:
-            return json.load(fh)
+            data = json.load(fh)
     except Exception as exc:
         logger.warning("Impossible de charger %s : %s", path, exc)
-        return {}
+        data = {}
+
+    _ALT_SENTENCES_CACHE[path] = data
+    return data
 
 
 def _clean_filename(text: str) -> str:
