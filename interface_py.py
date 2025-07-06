@@ -254,9 +254,14 @@ class PageProfiles(QWidget):
         layout.addWidget(QLabel("Fichier ALT JSON"))
         layout.addWidget(self.input_alt_json)
 
+        file_urls_layout = QHBoxLayout()
         self.input_urls_images = QLineEdit()
+        file_urls_layout.addWidget(self.input_urls_images)
+        self.button_urls_images = QPushButton("\U0001F4C1 Choisir un fichier txt")
+        self.button_urls_images.clicked.connect(self.browse_urls_images)
+        file_urls_layout.addWidget(self.button_urls_images)
         layout.addWidget(QLabel("Fichier URLs Images"))
-        layout.addWidget(self.input_urls_images)
+        layout.addLayout(file_urls_layout)
 
         self.input_urls_desc = QLineEdit()
         layout.addWidget(QLabel("Fichier URLs Description"))
@@ -363,6 +368,13 @@ class PageProfiles(QWidget):
             pass
         self.refresh_profiles()
 
+    def browse_urls_images(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Sélectionner un fichier", "", "Text Files (*.txt)"
+        )
+        if file_path:
+            self.input_urls_images.setText(file_path)
+
 
 class PageScrapLienCollection(QWidget):
     def __init__(self, manager: SettingsManager):
@@ -456,8 +468,11 @@ class PageScraperImages(QWidget):
         self.button_file = QPushButton("\U0001F4C1 Choisir un fichier txt")
         self.button_file.clicked.connect(self.browse_file)
         file_layout.addWidget(self.button_file)
-        layout.addWidget(QLabel("Fichier d'URLs"))
-        layout.addLayout(file_layout)
+        # Champ géré via l'onglet Profils – non ajouté au layout
+        label_urls = QLabel("Fichier d'URLs")
+        self.input_urls_file.hide()
+        self.button_file.hide()
+        label_urls.hide()
 
         dir_layout = QHBoxLayout()
         self.input_dest = QLineEdit(manager.settings.get("images_dest", "images"))
