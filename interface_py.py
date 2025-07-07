@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
     QFontComboBox,
     QTextEdit,
     QMessageBox,
+    QToolBar,
+    QToolButton,
 )
 from PySide6.QtCore import (
     QThread,
@@ -46,6 +48,16 @@ import scrap_description_produit
 import moteur_variante
 from settings_manager import SettingsManager, apply_settings
 from site_profile_manager import SiteProfileManager
+
+
+def load_stylesheet(path: str = "style.qss") -> None:
+    """Apply the application's stylesheet if available."""
+    app = QApplication.instance()
+    if app is None:
+        return
+    qss_path = Path(path)
+    if qss_path.exists():
+        app.setStyleSheet(qss_path.read_text(encoding="utf-8"))
 
 
 class QtLogHandler(logging.Handler):
@@ -1222,15 +1234,40 @@ class MainWindow(QMainWindow):
 
         self.profile_manager = SiteProfileManager()
 
-        self.menu = QListWidget()
-        self.menu.setMaximumWidth(150)
-        self.menu.addItem("Profils")
-        self.menu.addItem("Scrap Liens Collection")
-        self.menu.addItem("Scraper Images")
-        self.menu.addItem("Scrap Description")
-        self.menu.addItem("G\u00e9n\u00e9rateur de lien")
-        self.menu.addItem("Moteur Variante")
-        self.menu.addItem("Param\u00e8tres")
+        # Sidebar buttons
+        labels = [
+            "Profils",
+            "Scrap Liens Collection",
+            "Scraper Images",
+            "Scrap Description",
+            "G\u00e9n\u00e9rateur de lien",
+            "Moteur Variante",
+            "Param\u00e8tres",
+        ]
+
+        self.sidebar = QWidget()
+        side_layout = QVBoxLayout(self.sidebar)
+        side_layout.setContentsMargins(0, 0, 0, 0)
+        self.side_buttons: list[QToolButton] = []
+        for i, text in enumerate(labels):
+            btn = QToolButton(text=text)
+            btn.setCheckable(True)
+            btn.setAutoExclusive(True)
+            btn.clicked.connect(lambda checked, i=i: self.show_page(i))
+            side_layout.addWidget(btn)
+            self.side_buttons.append(btn)
+        side_layout.addStretch()
+
+        # Top bar
+        self.toolbar = QToolBar()
+        self.toolbar.setMovable(False)
+        self.addToolBar(Qt.TopToolBarArea, self.toolbar)
+        self.label_title = QLabel(labels[0])
+        self.search_field = QLineEdit()
+        self.search_field.setPlaceholderText("Rechercher...")
+        self.toolbar.addWidget(self.label_title)
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(self.search_field)
 
         self.stack = QStackedWidget()
         self.page_profiles = PageProfiles(self.profile_manager, self)
@@ -1248,16 +1285,33 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page_variants)
         self.stack.addWidget(self.page_settings)
 
-        self.menu.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.stack.currentChanged.connect(self.update_title)
 
+        # Layout central
         container = QWidget()
         layout = QHBoxLayout(container)
-        layout.addWidget(self.menu)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.sidebar)
         layout.addWidget(self.stack)
         self.setCentralWidget(container)
-        self.menu.setCurrentRow(0)
+
+        # Set initial page
+        self.side_buttons[0].setChecked(True)
+        self.show_page(0)
 
         self.apply_settings()
+
+    def show_page(self, index: int) -> None:
+        """Display page at given index."""
+        self.stack.setCurrentIndex(index)
+        if 0 <= index < len(self.side_buttons):
+            self.side_buttons[index].setChecked(True)
+        self.update_title(index)
+
+    def update_title(self, index: int) -> None:
+        """Update title label when page changes."""
+        if 0 <= index < len(self.side_buttons):
+            self.label_title.setText(self.side_buttons[index].text())
 
     def apply_settings(self) -> None:
         apply_settings(QApplication.instance(), self.settings.settings)
@@ -1266,6 +1320,7 @@ class MainWindow(QMainWindow):
 def main() -> None:
     app = QApplication(sys.argv)
     manager = SettingsManager()
+    load_stylesheet()
     window = MainWindow(manager)
     window.resize(800, 600)
     window.show()
