@@ -516,6 +516,7 @@ class PageScrapLienCollection(QWidget):
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
+        QMessageBox.information(self, "Terminé", "Le scraping des liens est terminé.")
 
     def toggle_console(self) -> None:
         visible = self.log_view.isVisible()
@@ -723,7 +724,12 @@ class PageScraperImages(QWidget):
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
         self.label_timer.setText("Temps restant : 0 seconde(s)")
-        QMessageBox.information(self, "Terminé", "Le téléchargement des images est terminé.")
+        QMessageBox.information(
+            self,
+            "Terminé",
+            "Le téléchargement des images est terminé.",
+        )
+        self.progress.setValue(0)
 
     def delete_folders(self) -> None:
         dest = Path(self.input_dest.text().strip() or "images")
@@ -826,6 +832,11 @@ class PageScrapDescription(QWidget):
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
+        QMessageBox.information(
+            self,
+            "Terminé",
+            "L'extraction de la description est terminée.",
+        )
 
     def toggle_console(self) -> None:
         visible = self.log_view.isVisible()
@@ -886,7 +897,12 @@ class PageVariantScraper(QWidget):
             w.editingFinished.connect(self.save_fields)
 
     def browse_output(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Fichier de sortie", "variants.txt", "Text Files (*.txt)")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Fichier de sortie",
+            "variants.txt",
+            "Text Files (*.txt);;CSV Files (*.csv)",
+        )
         if path:
             self.input_output.setText(path)
 
@@ -907,6 +923,7 @@ class PageVariantScraper(QWidget):
 
     def on_finished(self) -> None:
         self.button_start.setEnabled(True)
+        QMessageBox.information(self, "Terminé", "L'extraction des variantes est terminée.")
 
     def toggle_console(self) -> None:
         visible = self.log_view.isVisible()
@@ -1001,6 +1018,7 @@ class PageLinkGenerator(QWidget):
             self.output_links.setText("\n".join(links))
         else:
             self.output_links.setText("Aucune image valide trouv\u00e9e dans le dossier.")
+        QMessageBox.information(self, "Terminé", "La génération des liens est terminée.")
 
     def copy_to_clipboard(self) -> None:
         clipboard: QClipboard = QApplication.clipboard()
