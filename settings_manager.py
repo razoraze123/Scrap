@@ -29,6 +29,10 @@ DEFAULT_SETTINGS = {
     "desc_selector": "",
     "desc_output": "description.html",
 
+    "variant_url": "",
+    "variant_selector": "",
+    "variant_output": "variants.txt",
+
     "linkgen_base_url": "https://www.planetebob.fr",
     "linkgen_date": "2025/07",
     "linkgen_folder": "",

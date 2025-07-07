@@ -43,6 +43,7 @@ from PySide6.QtGui import QFont, QPainter, QColor, QPixmap, QClipboard
 import scrap_lien_collection
 import scraper_images
 import scrap_description_produit
+import moteur_variante
 from settings_manager import SettingsManager, apply_settings
 from site_profile_manager import SiteProfileManager
 
@@ -227,6 +228,34 @@ class ScrapDescriptionWorker(QThread):
             scrap_description_produit.scrape_description(
                 self.url, self.selector, self.output
             )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("%s", exc)
+        finally:
+            logger.removeHandler(handler)
+            self.finished.emit()
+
+
+class ScrapVariantWorker(QThread):
+    """Background worker to extract and save product variants."""
+
+    log = Signal(str)
+    finished = Signal()
+
+    def __init__(self, url: str, selector: str, output: Path) -> None:
+        super().__init__()
+        self.url = url
+        self.selector = selector
+        self.output = output
+
+    def run(self) -> None:
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+        handler = QtLogHandler(self.log)
+        formatter = logging.Formatter("%(levelname)s: %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        try:
+            moteur_variante.scrape_variants(self.url, self.selector, self.output)
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
         finally:
@@ -811,6 +840,87 @@ class PageScrapDescription(QWidget):
         self.manager.save_setting("desc_output", self.input_output.text())
 
 
+class PageVariantScraper(QWidget):
+    def __init__(self, manager: SettingsManager) -> None:
+        super().__init__()
+        self.manager = manager
+        layout = QVBoxLayout(self)
+
+        self.input_url = QLineEdit(manager.settings.get("variant_url", ""))
+        self.input_url.setPlaceholderText("URL du produit")
+        layout.addWidget(QLabel("URL du produit"))
+        layout.addWidget(self.input_url)
+
+        self.input_selector = QLineEdit(
+            manager.settings.get("variant_selector", moteur_variante.DEFAULT_SELECTOR)
+        )
+        label_selector = QLabel("Sélecteur CSS")
+        self.input_selector.hide()
+        label_selector.hide()
+
+        file_layout = QHBoxLayout()
+        self.input_output = QLineEdit(manager.settings.get("variant_output", "variants.txt"))
+        file_layout.addWidget(self.input_output)
+        self.button_output = QPushButton("\U0001F4C1 Choisir fichier")
+        self.button_output.clicked.connect(self.browse_output)
+        file_layout.addWidget(self.button_output)
+        layout.addWidget(QLabel("Fichier de sortie"))
+        layout.addLayout(file_layout)
+
+        self.button_start = QPushButton("Extraire variantes")
+        layout.addWidget(self.button_start)
+
+        self.button_toggle_console = QPushButton("Masquer la console")
+        self.button_toggle_console.clicked.connect(self.toggle_console)
+        layout.addWidget(self.button_toggle_console)
+
+        self.log_view = QPlainTextEdit()
+        self.log_view.setReadOnly(True)
+        layout.addWidget(self.log_view)
+        layout.addStretch()
+
+        self.worker: ScrapVariantWorker | None = None
+        self.button_start.clicked.connect(self.start_worker)
+
+        for w in [self.input_url, self.input_selector, self.input_output]:
+            w.editingFinished.connect(self.save_fields)
+
+    def browse_output(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(self, "Fichier de sortie", "variants.txt", "Text Files (*.txt)")
+        if path:
+            self.input_output.setText(path)
+
+    def start_worker(self) -> None:
+        url = self.input_url.text().strip()
+        selector = self.input_selector.text().strip() or moteur_variante.DEFAULT_SELECTOR
+        output = Path(self.input_output.text().strip() or "variants.txt")
+        if not url:
+            self.log_view.appendPlainText("Veuillez renseigner l'URL.")
+            return
+        self.button_start.setEnabled(False)
+        self.log_view.clear()
+        self.save_fields()
+        self.worker = ScrapVariantWorker(url, selector, output)
+        self.worker.log.connect(self.log_view.appendPlainText)
+        self.worker.finished.connect(self.on_finished)
+        self.worker.start()
+
+    def on_finished(self) -> None:
+        self.button_start.setEnabled(True)
+
+    def toggle_console(self) -> None:
+        visible = self.log_view.isVisible()
+        self.log_view.setVisible(not visible)
+        self.button_toggle_console.setText(
+            "Afficher la console" if visible else "Masquer la console"
+        )
+
+    def save_fields(self) -> None:
+        self.manager.save_setting("variant_url", self.input_url.text())
+        self.manager.save_setting("variant_selector", self.input_selector.text())
+        self.manager.save_setting("variant_output", self.input_output.text())
+
+
 class PageLinkGenerator(QWidget):
     """Generate image URLs for WooCommerce uploads from a local folder."""
 
@@ -1101,6 +1211,7 @@ class MainWindow(QMainWindow):
         self.menu.addItem("Scraper Images")
         self.menu.addItem("Scrap Description")
         self.menu.addItem("G\u00e9n\u00e9rateur de lien")
+        self.menu.addItem("Moteur Variante")
         self.menu.addItem("Param\u00e8tres")
 
         self.stack = QStackedWidget()
@@ -1109,12 +1220,14 @@ class MainWindow(QMainWindow):
         self.page_images = PageScraperImages(settings)
         self.page_desc = PageScrapDescription(settings)
         self.page_linkgen = PageLinkGenerator(settings)
+        self.page_variants = PageVariantScraper(settings)
         self.page_settings = PageSettings(settings, self.apply_settings)
         self.stack.addWidget(self.page_profiles)
         self.stack.addWidget(self.page_scrap)
         self.stack.addWidget(self.page_images)
         self.stack.addWidget(self.page_desc)
         self.stack.addWidget(self.page_linkgen)
+        self.stack.addWidget(self.page_variants)
         self.stack.addWidget(self.page_settings)
 
         self.menu.currentRowChanged.connect(self.stack.setCurrentIndex)
