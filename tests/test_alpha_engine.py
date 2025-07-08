@@ -182,3 +182,18 @@ def test_start_analysis_error(monkeypatch):
     eng.start_analysis()
 
     assert mod.QMessageBox.last[-1] == ("critical", "Erreur", "boom")
+
+
+def test_build_wp_url_strip_digits(monkeypatch):
+    mod = load_module(monkeypatch)
+
+    url = mod.AlphaEngine._build_wp_url(
+        "https://wp",
+        "2024/05",
+        "https://ex.com/img/bob-ficelle-outdoor-beige-453.png?x=1",
+    )
+
+    assert (
+        url
+        == "https://wp/wp-content/uploads/2024/05/bob-ficelle-outdoor-beige.png"
+    )

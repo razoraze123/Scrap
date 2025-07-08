@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -83,6 +84,7 @@ class AlphaEngine(QWidget):
     def _build_wp_url(domain: str, date_path: str, img_url: str) -> str:
         """Return WordPress URL for *img_url* using domain and date."""
         filename = img_url.split("/")[-1].split("?")[0]
+        filename = re.sub(r"-\d+(?=\.\w+$)", "", filename)
         domain = domain.rstrip("/")
         date_path = date_path.strip("/")
         return f"{domain}/wp-content/uploads/{date_path}/{filename}"
