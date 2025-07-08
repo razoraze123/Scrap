@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -12,6 +14,8 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 from PySide6.QtCore import Qt
+
+import moteur_variante
 
 
 class AlphaEngine(QWidget):
@@ -52,11 +56,37 @@ class AlphaEngine(QWidget):
         export_layout.addWidget(self.button_csv)
         layout.addLayout(export_layout)
 
+    @staticmethod
+    def _build_wp_url(domain: str, date_path: str, img_url: str) -> str:
+        """Return WordPress URL for *img_url* using domain and date."""
+        filename = img_url.split("/")[-1].split("?")[0]
+        domain = domain.rstrip("/")
+        date_path = date_path.strip("/")
+        return f"{domain}/wp-content/uploads/{date_path}/{filename}"
+
     # --- Slots -------------------------------------------------------------
     def start_analysis(self) -> None:
-        """Placeholder method for the scraping logic."""
-        # TODO: insert scraping logic here
-        self.result_view.append("Analyse en cours ...")
+        """Fetch variants with images and generate WordPress links."""
+        url = self.input_url.text().strip()
+        if not url:
+            QMessageBox.warning(self, "Erreur", "Aucune URL fournie")
+            return
+
+        try:
+            title, variants = moteur_variante.extract_variants_with_images(url)
+        except Exception as exc:  # noqa: BLE001
+            logging.exception("start_analysis failed")
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+
+        domain = self.input_domain.text().strip()
+        date_path = self.input_date.text().strip()
+
+        self.result_view.clear()
+        self.result_view.append(title)
+        for name, img in variants.items():
+            wp_url = self._build_wp_url(domain, date_path, img)
+            self.result_view.append(f"{name} -> {wp_url}")
 
     def export_excel(self) -> None:
         """Export the current results to an Excel file."""
