@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict
 
@@ -15,7 +16,8 @@ class SiteProfileManager:
         p = Path(path)
         try:
             return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as exc:
+            logging.warning("Failed to load profile %s: %s", path, exc)
             return {}
 
     def save_profile(self, path: str | Path, data: Dict[str, Any]) -> None:
@@ -23,8 +25,8 @@ class SiteProfileManager:
         p = Path(path)
         try:
             p.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.warning("Failed to save profile %s: %s", path, exc)
 
     def apply_profile_to_ui(self, profile: Dict[str, Any], main_window) -> None:
         """Apply CSS selectors from *profile* to the main window UI."""
