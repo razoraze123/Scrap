@@ -1263,11 +1263,7 @@ class MainWindow(QMainWindow):
         self.toolbar.setMovable(False)
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)
         self.label_title = QLabel(labels[0])
-        self.search_field = QLineEdit()
-        self.search_field.setPlaceholderText("Rechercher...")
         self.toolbar.addWidget(self.label_title)
-        self.toolbar.addSeparator()
-        self.toolbar.addWidget(self.search_field)
 
         self.stack = QStackedWidget()
         self.page_profiles = PageProfiles(self.profile_manager, self)
