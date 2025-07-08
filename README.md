@@ -13,6 +13,7 @@ Un outil Python robuste et évolutif pour scraper automatiquement les images de 
 ✅ Résumé final clair dans la console
 ✅ Extraction des noms et liens de produits d'une collection (scrap_lien_collection.py)
 ✅ Récupération de la description HTML d'un produit (scrap_description_produit.py)
+✅ Nouvel onglet "Alpha" combinant variantes et liens WordPress
 Exemple : `python scrap_lien_collection.py https://exemple.com/collection --selector "div.product a"`
 
 Pour tester ou générer rapidement un sélecteur CSS depuis un extrait HTML,

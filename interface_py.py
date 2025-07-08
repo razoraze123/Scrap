@@ -42,6 +42,8 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QFont, QPainter, QColor, QPixmap, QClipboard
 
+from alpha_engine import AlphaEngine
+
 import scrap_lien_collection
 import scraper_images
 import scrap_description_produit
@@ -1243,6 +1245,7 @@ class MainWindow(QMainWindow):
             "Scrap Description",
             "G\u00e9n\u00e9rateur de lien",
             "Moteur Variante",
+            "Alpha",
             "Param\u00e8tres",
         ]
 
@@ -1273,6 +1276,7 @@ class MainWindow(QMainWindow):
         self.page_desc = PageScrapDescription(settings)
         self.page_linkgen = PageLinkGenerator(settings)
         self.page_variants = PageVariantScraper(settings)
+        self.page_alpha = AlphaEngine()
         self.page_settings = PageSettings(settings, self.apply_settings)
         self.stack.addWidget(self.page_profiles)
         self.stack.addWidget(self.page_scrap)
@@ -1280,6 +1284,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page_desc)
         self.stack.addWidget(self.page_linkgen)
         self.stack.addWidget(self.page_variants)
+        self.stack.addWidget(self.page_alpha)
         self.stack.addWidget(self.page_settings)
 
         self.stack.currentChanged.connect(self.update_title)

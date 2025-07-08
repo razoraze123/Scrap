@@ -13,8 +13,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-import pandas as pd
-
 
 class AlphaEngine(QWidget):
     """Combined engine to fetch variants and generate WordPress links."""
@@ -67,6 +65,8 @@ class AlphaEngine(QWidget):
         )
         if not path:
             return
+        import pandas as pd  # Imported lazily to avoid mandatory dependency
+
         df = pd.DataFrame({"data": [self.result_view.toPlainText()]})
         try:
             df.to_excel(path, index=False)
@@ -82,6 +82,8 @@ class AlphaEngine(QWidget):
         )
         if not path:
             return
+        import pandas as pd  # Imported lazily to avoid mandatory dependency
+
         df = pd.DataFrame({"data": [self.result_view.toPlainText()]})
         try:
             df.to_csv(path, index=False)
