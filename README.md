@@ -40,13 +40,13 @@ pip install -r requirements.txt
 
 🔧 Configuration
 
-Lors de la première utilisation, copiez `settings.example.json` en `settings.json` :
+Copiez d'abord `settings.example.json` vers `settings.json` puis personnalisez ce dernier localement :
 
 ```bash
 cp settings.example.json settings.json
 ```
 
-Personnalisez ensuite `settings.json` selon vos besoins. Ce fichier est ignoré par Git pour ne pas partager vos réglages personnels.
+Adaptez ensuite `settings.json` en fonction de vos préférences. Ce fichier de configuration personnel reste local car il est listé dans `.gitignore`.
 
 🔄 Mise à jour de l'application
 Un bouton "Mettre à jour l'app" exécute `git pull` puis redémarre le programme. L'opération nécessite une connexion réseau et peut entraîner des conflits si vous avez modifié le code localement. Une confirmation est demandée avant l'exécution et les erreurs réseau sont affichées clairement. Vous pouvez désactiver cette fonctionnalité en plaçant `"enable_update": false` dans `settings.json`.
