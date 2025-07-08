@@ -267,7 +267,8 @@ class ScrapVariantWorker(QThread):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         try:
-            moteur_variante.scrape_variants(self.url, self.selector, self.output)
+            title, mapping = moteur_variante.extract_variants_with_images(self.url)
+            moteur_variante.save_images_to_file(title, mapping, self.output)
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
         finally:
