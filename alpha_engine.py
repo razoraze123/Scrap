@@ -13,7 +13,30 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QFileDialog,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, QThread, Signal
+
+
+class Worker(QObject):
+    """Background worker fetching variants and images."""
+
+    finished = Signal()
+    result_ready = Signal(str, dict)
+    error = Signal(str)
+
+    def __init__(self, url: str) -> None:
+        super().__init__()
+        self.url = url
+
+    def run(self) -> None:
+        try:
+            title, variants = moteur_variante.extract_variants_with_images(self.url)
+        except Exception as exc:  # noqa: BLE001
+            logging.exception("Worker run failed")
+            self.error.emit(str(exc))
+        else:
+            self.result_ready.emit(title, variants)
+        finally:
+            self.finished.emit()
 
 import moteur_variante
 
@@ -66,19 +89,29 @@ class AlphaEngine(QWidget):
 
     # --- Slots -------------------------------------------------------------
     def start_analysis(self) -> None:
-        """Fetch variants with images and generate WordPress links."""
+        """Fetch variants asynchronously using a worker thread."""
         url = self.input_url.text().strip()
         if not url:
             QMessageBox.warning(self, "Erreur", "Aucune URL fournie")
             return
 
-        try:
-            title, variants = moteur_variante.extract_variants_with_images(url)
-        except Exception as exc:  # noqa: BLE001
-            logging.exception("start_analysis failed")
-            QMessageBox.critical(self, "Erreur", str(exc))
-            return
+        self.button_start.setEnabled(False)
+        self.result_view.clear()
+        self.result_view.append("Analyse en cours...")
 
+        self._thread = QThread(self)
+        self._worker = Worker(url)
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.result_ready.connect(self._display_result)
+        self._worker.error.connect(self._show_error)
+        self._worker.finished.connect(self._thread.quit)
+        self._worker.finished.connect(self._worker.deleteLater)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.finished.connect(self._analysis_finished)
+        self._thread.start()
+
+    def _display_result(self, title: str, variants: dict) -> None:
         domain = self.input_domain.text().strip()
         date_path = self.input_date.text().strip()
 
@@ -87,6 +120,13 @@ class AlphaEngine(QWidget):
         for name, img in variants.items():
             wp_url = self._build_wp_url(domain, date_path, img)
             self.result_view.append(f"{name} -> {wp_url}")
+
+    def _show_error(self, msg: str) -> None:
+        QMessageBox.critical(self, "Erreur", msg)
+
+    def _analysis_finished(self) -> None:
+        self.result_view.append("Analyse terminée.")
+        self.button_start.setEnabled(True)
 
     def export_excel(self) -> None:
         """Export the current results to an Excel file."""
