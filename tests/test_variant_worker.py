@@ -26,6 +26,7 @@ def setup_pyside(monkeypatch):
     qtcore = types.ModuleType("PySide6.QtCore")
     qtcore.QThread = type("QThread", (), {})
     qtcore.Signal = DummySignal
+    qtcore.QObject = type("QObject", (), {"moveToThread": lambda self, t: None, "deleteLater": lambda self: None})
     qtcore.QPropertyAnimation = object
     qtcore.Property = lambda t, fget, fset: property(fget, fset)
     qtcore.QRect = object

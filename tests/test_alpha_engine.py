@@ -42,6 +42,9 @@ class DummyButton:
     def __init__(self, *args, **kwargs):
         self.clicked = DummySignal()
 
+    def setEnabled(self, state):
+        self.enabled = state
+
 class DummyLayout:
     def __init__(self, *args, **kwargs):
         pass
@@ -61,12 +64,15 @@ class DummyFileDialog:
 
 class DummyMessageBox:
     last = []
+
     @staticmethod
     def critical(parent, title, text):
         DummyMessageBox.last.append(("critical", title, text))
+
     @staticmethod
     def warning(parent, title, text):
         DummyMessageBox.last.append(("warning", title, text))
+
     @staticmethod
     def information(parent, title, text):
         DummyMessageBox.last.append(("information", title, text))
@@ -86,8 +92,38 @@ def setup_pyside(monkeypatch):
     }.items():
         setattr(qtwidgets, name, cls)
 
+    class DummyThread:
+        def __init__(self, *a, **k):
+            self.started = DummySignal()
+            self.finished = DummySignal()
+
+        def start(self):
+            self.started.emit()
+
+        def quit(self):
+            self.finished.emit()
+
+        def wait(self):
+            pass
+
+        def deleteLater(self):
+            pass
+
+    class DummyQObject:
+        def __init__(self, *a, **k):
+            pass
+
+        def moveToThread(self, thread):
+            self._thread = thread
+
+        def deleteLater(self):
+            pass
+
     qtcore = types.ModuleType("PySide6.QtCore")
     qtcore.Qt = types.SimpleNamespace()
+    qtcore.QThread = DummyThread
+    qtcore.Signal = DummySignal
+    qtcore.QObject = DummyQObject
 
     pyside = types.ModuleType("PySide6")
     pyside.QtWidgets = qtwidgets
@@ -128,6 +164,7 @@ def test_start_analysis_success(monkeypatch):
         "Title",
         "Red -> https://wp/wp-content/uploads/2024/05/red.jpg",
         "Blue -> https://wp/wp-content/uploads/2024/05/blue.png",
+        "Analyse terminée.",
     ]
 
 
