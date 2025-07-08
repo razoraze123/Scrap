@@ -1,0 +1,147 @@
+import sys
+import types
+from pathlib import Path
+import importlib.util as util
+
+class DummySignal:
+    def __init__(self, *args, **kwargs):
+        self._cbs = []
+    def connect(self, cb):
+        self._cbs.append(cb)
+    def emit(self, *a, **k):
+        for cb in self._cbs:
+            cb(*a, **k)
+
+class DummyWidget:
+    def __init__(self, *args, **kwargs):
+        pass
+
+class DummyTextEdit:
+    def __init__(self, *args, **kwargs):
+        self._text = ""
+    def append(self, txt):
+        self._text += txt + "\n"
+    def clear(self):
+        self._text = ""
+    def toPlainText(self):
+        return self._text
+    def setText(self, txt):
+        self._text = txt
+
+class DummyLineEdit:
+    def __init__(self, txt=""):
+        self._text = txt
+    def setPlaceholderText(self, txt):
+        pass
+    def text(self):
+        return self._text
+    def setText(self, txt):
+        self._text = txt
+
+class DummyButton:
+    def __init__(self, *args, **kwargs):
+        self.clicked = DummySignal()
+
+class DummyLayout:
+    def __init__(self, *args, **kwargs):
+        pass
+    def addWidget(self, *args, **kwargs):
+        pass
+    def addLayout(self, *args, **kwargs):
+        pass
+
+class DummyLabel:
+    def __init__(self, *args, **kwargs):
+        pass
+
+class DummyFileDialog:
+    @staticmethod
+    def getSaveFileName(*a, **k):
+        return "", ""
+
+class DummyMessageBox:
+    last = []
+    @staticmethod
+    def critical(parent, title, text):
+        DummyMessageBox.last.append(("critical", title, text))
+    @staticmethod
+    def warning(parent, title, text):
+        DummyMessageBox.last.append(("warning", title, text))
+    @staticmethod
+    def information(parent, title, text):
+        DummyMessageBox.last.append(("information", title, text))
+
+def setup_pyside(monkeypatch):
+    qtwidgets = types.ModuleType("PySide6.QtWidgets")
+    for name, cls in {
+        "QWidget": DummyWidget,
+        "QVBoxLayout": DummyLayout,
+        "QHBoxLayout": DummyLayout,
+        "QLabel": DummyLabel,
+        "QLineEdit": DummyLineEdit,
+        "QPushButton": DummyButton,
+        "QTextEdit": DummyTextEdit,
+        "QMessageBox": DummyMessageBox,
+        "QFileDialog": DummyFileDialog,
+    }.items():
+        setattr(qtwidgets, name, cls)
+
+    qtcore = types.ModuleType("PySide6.QtCore")
+    qtcore.Qt = types.SimpleNamespace()
+
+    pyside = types.ModuleType("PySide6")
+    pyside.QtWidgets = qtwidgets
+    pyside.QtCore = qtcore
+
+    monkeypatch.setitem(sys.modules, "PySide6", pyside)
+    monkeypatch.setitem(sys.modules, "PySide6.QtWidgets", qtwidgets)
+    monkeypatch.setitem(sys.modules, "PySide6.QtCore", qtcore)
+
+
+def load_module(monkeypatch):
+    setup_pyside(monkeypatch)
+    spec = util.spec_from_file_location(
+        "alpha_engine", Path(__file__).resolve().parents[1] / "alpha_engine.py"
+    )
+    mod = util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_start_analysis_success(monkeypatch):
+    mod = load_module(monkeypatch)
+
+    def fake_extract(url):
+        assert url == "http://ex"
+        return "Title", {"Red": "https://a/red.jpg", "Blue": "https://a/blue.png"}
+
+    monkeypatch.setattr(mod.moteur_variante, "extract_variants_with_images", fake_extract)
+
+    eng = mod.AlphaEngine()
+    eng.input_url.setText("http://ex")
+    eng.input_domain.setText("https://wp")
+    eng.input_date.setText("2024/05")
+    eng.start_analysis()
+
+    lines = eng.result_view.toPlainText().strip().splitlines()
+    assert lines == [
+        "Title",
+        "Red -> https://wp/wp-content/uploads/2024/05/red.jpg",
+        "Blue -> https://wp/wp-content/uploads/2024/05/blue.png",
+    ]
+
+
+def test_start_analysis_error(monkeypatch):
+    mod = load_module(monkeypatch)
+
+    def fake_extract(url):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(mod.moteur_variante, "extract_variants_with_images", fake_extract)
+
+    eng = mod.AlphaEngine()
+    eng.input_url.setText("http://ex")
+    mod.QMessageBox.last.clear()
+    eng.start_analysis()
+
+    assert mod.QMessageBox.last[-1] == ("critical", "Erreur", "boom")
