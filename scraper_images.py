@@ -411,6 +411,12 @@ def main() -> None:
         help="Nombre maximal de threads pour les telechargements"
         " (defaut: %(default)s)",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="Nombre maximal de pages a traiter en parallele (defaut: %(default)s)",
+    )
     parser.set_defaults(use_alt_json=USE_ALT_JSON)
     args = parser.parse_args()
 
@@ -435,21 +441,44 @@ def main() -> None:
         format="%(levelname)s: %(message)s",
     )
 
-    for url in urls_list:
-        try:
-            info = download_images(
-                url,
-                css_selector=args.selector,
-                parent_dir=args.parent_dir,
-                user_agent=args.user_agent,
-                use_alt_json=args.use_alt_json,
-                alt_json_path=args.alt_json_path,
-                max_threads=args.max_threads,
-            )
-            if args.preview:
-                _open_folder(info["folder"])
-        except ValueError as exc:
-            logger.error("Erreur : %s", exc)
+    if args.jobs > 1 and len(urls_list) > 1:
+        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            futures = {
+                executor.submit(
+                    download_images,
+                    url,
+                    css_selector=args.selector,
+                    parent_dir=args.parent_dir,
+                    user_agent=args.user_agent,
+                    use_alt_json=args.use_alt_json,
+                    alt_json_path=args.alt_json_path,
+                    max_threads=args.max_threads,
+                ): url
+                for url in urls_list
+            }
+            for fut in as_completed(futures):
+                try:
+                    info = fut.result()
+                    if args.preview:
+                        _open_folder(info["folder"])
+                except ValueError as exc:
+                    logger.error("Erreur : %s", exc)
+    else:
+        for url in urls_list:
+            try:
+                info = download_images(
+                    url,
+                    css_selector=args.selector,
+                    parent_dir=args.parent_dir,
+                    user_agent=args.user_agent,
+                    use_alt_json=args.use_alt_json,
+                    alt_json_path=args.alt_json_path,
+                    max_threads=args.max_threads,
+                )
+                if args.preview:
+                    _open_folder(info["folder"])
+            except ValueError as exc:
+                logger.error("Erreur : %s", exc)
 
 
 if __name__ == "__main__":
