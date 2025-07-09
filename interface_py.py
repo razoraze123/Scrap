@@ -54,6 +54,7 @@ from alpha_engine import AlphaEngine
 import scrap_lien_collection
 import scraper_images
 import scrap_description_produit
+import scrap_prix_produit
 import moteur_variante
 from settings_manager import SettingsManager, apply_settings
 from site_profile_manager import SiteProfileManager
@@ -344,6 +345,34 @@ class ScrapDescriptionWorker(QThread):
             scrap_description_produit.scrape_description(
                 self.url, self.selector, self.output
             )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("%s", exc)
+        finally:
+            logger.removeHandler(handler)
+            self.finished.emit()
+
+
+class ScrapPriceWorker(QThread):
+    """Background worker to extract and save product price."""
+
+    log = Signal(str)
+    finished = Signal()
+
+    def __init__(self, url: str, selector: str, output: Path) -> None:
+        super().__init__()
+        self.url = url
+        self.selector = selector
+        self.output = output
+
+    def run(self) -> None:
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+        handler = QtLogHandler(self.log)
+        formatter = logging.Formatter("%(levelname)s: %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        try:
+            scrap_prix_produit.scrape_price(self.url, self.selector, self.output)
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
         finally:
@@ -1014,6 +1043,86 @@ class PageScrapDescription(QWidget):
         self.manager.save_setting("desc_output", self.input_output.text())
 
 
+class PageScrapPrice(QWidget):
+    def __init__(self, manager: SettingsManager) -> None:
+        super().__init__()
+        self.manager = manager
+        layout = QVBoxLayout(self)
+
+        self.input_url = QLineEdit(manager.settings.get("price_url", ""))
+        self.input_url.setPlaceholderText("URL du produit")
+        layout.addWidget(QLabel("URL du produit"))
+        layout.addWidget(self.input_url)
+
+        self.input_selector = QLineEdit(
+            manager.settings.get("price_selector", scrap_prix_produit.DEFAULT_SELECTOR)
+        )
+        label_selector = QLabel("Sélecteur CSS")
+        self.input_selector.hide()
+        label_selector.hide()
+
+        self.input_output = QLineEdit(manager.settings.get("price_output", "price.txt"))
+        layout.addWidget(QLabel("Fichier de sortie"))
+        layout.addWidget(self.input_output)
+
+        self.button_start = QPushButton("Extraire")
+        layout.addWidget(self.button_start)
+
+        self.button_toggle_console = QPushButton("Masquer la console")
+        self.button_toggle_console.clicked.connect(self.toggle_console)
+        layout.addWidget(self.button_toggle_console)
+
+        self.log_view = QPlainTextEdit()
+        self.log_view.setReadOnly(True)
+        layout.addWidget(self.log_view)
+        layout.addStretch()
+
+        self.worker: ScrapPriceWorker | None = None
+        self.button_start.clicked.connect(self.start_worker)
+
+        for widget in [self.input_url, self.input_selector, self.input_output]:
+            widget.editingFinished.connect(self.save_fields)
+
+    def start_worker(self) -> None:
+        url = self.input_url.text().strip()
+        selector = self.input_selector.text().strip() or scrap_prix_produit.DEFAULT_SELECTOR
+        output = Path(self.input_output.text().strip() or "price.txt")
+
+        if not url:
+            self.log_view.appendPlainText("Veuillez renseigner l'URL.")
+            return
+
+        self.button_start.setEnabled(False)
+        self.log_view.clear()
+
+        self.save_fields()
+
+        self.worker = ScrapPriceWorker(url, selector, output)
+        self.worker.log.connect(self.log_view.appendPlainText)
+        self.worker.finished.connect(self.on_finished)
+        self.worker.start()
+
+    def on_finished(self) -> None:
+        self.button_start.setEnabled(True)
+        QMessageBox.information(
+            self,
+            "Terminé",
+            "L'extraction du prix est terminée.",
+        )
+
+    def toggle_console(self) -> None:
+        visible = self.log_view.isVisible()
+        self.log_view.setVisible(not visible)
+        self.button_toggle_console.setText(
+            "Afficher la console" if visible else "Masquer la console"
+        )
+
+    def save_fields(self) -> None:
+        self.manager.save_setting("price_url", self.input_url.text())
+        self.manager.save_setting("price_selector", self.input_selector.text())
+        self.manager.save_setting("price_output", self.input_output.text())
+
+
 class PageVariantScraper(QWidget):
     def __init__(self, manager: SettingsManager) -> None:
         super().__init__()
@@ -1647,11 +1756,12 @@ class MainWindow(QMainWindow):
             "Scrap Liens Collection",
             "Scraper Images",
             "Scrap Description",
-            "G\u00e9n\u00e9rateur de lien",
+            "Scrap Prix",
+            "Générateur de lien",
             "Moteur Variante",
             "Alpha",
             "Alpha 2",
-            "Param\u00e8tres",
+            "Paramètres",
         ]
 
         icon_names = [
@@ -1659,6 +1769,7 @@ class MainWindow(QMainWindow):
             "links.svg",
             "images.svg",
             "description.svg",
+            "variant.svg",
             "linkgen.svg",
             "variant.svg",
             "alpha.svg",
@@ -1705,6 +1816,7 @@ class MainWindow(QMainWindow):
         self.page_scrap = PageScrapLienCollection(settings)
         self.page_images = PageScraperImages(settings)
         self.page_desc = PageScrapDescription(settings)
+        self.page_price = PageScrapPrice(settings)
         self.page_linkgen = PageLinkGenerator(settings)
         self.page_variants = PageVariantScraper(settings)
         self.page_alpha = AlphaEngine()
@@ -1714,6 +1826,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page_scrap)
         self.stack.addWidget(self.page_images)
         self.stack.addWidget(self.page_desc)
+        self.stack.addWidget(self.page_price)
         self.stack.addWidget(self.page_linkgen)
         self.stack.addWidget(self.page_variants)
         self.stack.addWidget(self.page_alpha)
@@ -1728,6 +1841,11 @@ class MainWindow(QMainWindow):
         self.page_scrap.input_url.editingFinished.connect(
             lambda: self.profile_manager.detect_and_apply(
                 self.page_scrap.input_url.text(), self
+            )
+        )
+        self.page_price.input_url.editingFinished.connect(
+            lambda: self.profile_manager.detect_and_apply(
+                self.page_price.input_url.text(), self
             )
         )
 

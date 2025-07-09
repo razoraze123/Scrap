@@ -56,6 +56,12 @@ class SiteProfileManager:
             main_window.page_scrap.input_selector.setText(
                 selectors.get("collection", "")
             )
+        if hasattr(main_window, "page_price") and hasattr(
+            main_window.page_price, "input_selector"
+        ):
+            main_window.page_price.input_selector.setText(
+                selectors.get("price", "")
+            )
 
     def detect_and_apply(self, url: str, main_window) -> None:
         """Detect site type from *url* and apply matching default profile."""
