@@ -10,6 +10,8 @@ from __future__ import annotations
 import sys
 
 import argparse
+import csv
+import json
 import logging
 import random
 import time
@@ -38,13 +40,16 @@ def _random_sleep(min_s: float = 1.0, max_s: float = 2.5) -> None:
 
 def scrape_collection(
     url: str,
-    output_txt: Path,
+    output_path: Path,
     css_selector: str = DEFAULT_SELECTOR,
     next_selector: str = DEFAULT_NEXT_SELECTOR,
+    output_format: str = "txt",
 ) -> None:
-    """Scrape all products from *url* using *css_selector* and save them to *output_txt*.
+    """Scrape all products from *url* and save them in *output_path*.
 
-    ``next_selector`` is used to detect the button leading to the next page.
+    ``css_selector`` targets product links and ``next_selector`` detects the
+    pagination button. ``output_format`` controls the file format: ``txt``,
+    ``json`` or ``csv``.
     """
 
     driver = setup_driver()
@@ -93,12 +98,25 @@ def scrape_collection(
     finally:
         driver.quit()
 
-    output_txt.parent.mkdir(parents=True, exist_ok=True)
-    with output_txt.open("w", encoding="utf-8-sig") as f:
-        for row in results:
-            f.write(f"{row['name']} - {row['url']}\n")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_format == "json":
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+    elif output_format == "csv":
+        with output_path.open("w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["name", "url"])
+            writer.writeheader()
+            writer.writerows(results)
+    else:
+        with output_path.open("w", encoding="utf-8-sig") as f:
+            for row in results:
+                f.write(f"{row['name']} - {row['url']}\n")
 
-    logging.info("\u2714\ufe0f %d produits sauvegardes dans %s", len(results), output_txt)
+    logging.info(
+        "\u2714\ufe0f %d produits sauvegardes dans %s",
+        len(results),
+        output_path,
+    )
 
 
 def main() -> None:
@@ -135,6 +153,12 @@ def main() -> None:
         default=DEFAULT_NEXT_SELECTOR,
         help="Selecteur CSS du bouton 'page suivante' (defaut: %(default)s)",
     )
+    parser.add_argument(
+        "--format",
+        choices=["txt", "json", "csv"],
+        default="txt",
+        help="Format de sortie : txt, json ou csv (defaut: %(default)s)",
+    )
     args = parser.parse_args()
 
     if not args.url:
@@ -152,7 +176,13 @@ def main() -> None:
     )
 
     try:
-        scrape_collection(args.url, Path(args.output), css_selector, args.next_selector)
+        scrape_collection(
+            args.url,
+            Path(args.output),
+            css_selector,
+            args.next_selector,
+            args.format,
+        )
     except Exception as exc:
         logging.error("Une erreur est survenue : %s", exc)
         sys.exit(1)

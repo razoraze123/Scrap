@@ -126,12 +126,20 @@ class ScrapLienWorker(QThread):
     log = Signal(str)
     finished = Signal()
 
-    def __init__(self, url: str, output: Path, selector: str, log_level: str):
+    def __init__(
+        self,
+        url: str,
+        output: Path,
+        selector: str,
+        log_level: str,
+        output_format: str,
+    ):
         super().__init__()
         self.url = url
         self.output = output
         self.selector = selector
         self.log_level = log_level
+        self.output_format = output_format
 
     def run(self) -> None:
         logger = logging.getLogger()
@@ -146,7 +154,11 @@ class ScrapLienWorker(QThread):
         logger.addHandler(stream_handler)
         try:
             scrap_lien_collection.scrape_collection(
-                self.url, self.output, self.selector
+                self.url,
+                self.output,
+                self.selector,
+                scrap_lien_collection.DEFAULT_NEXT_SELECTOR,
+                self.output_format,
             )
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
@@ -505,6 +517,12 @@ class PageScrapLienCollection(QWidget):
         layout.addWidget(QLabel("Fichier de sortie"))
         layout.addWidget(self.input_output)
 
+        self.combo_format = QComboBox()
+        self.combo_format.addItems(["txt", "json", "csv"])
+        self.combo_format.setCurrentText(manager.settings.get("scrap_lien_format", "txt"))
+        layout.addWidget(QLabel("Format"))
+        layout.addWidget(self.combo_format)
+
         self.input_selector = QLineEdit(
             manager.settings.get(
                 "scrap_lien_selector", scrap_lien_collection.DEFAULT_SELECTOR
@@ -540,12 +558,14 @@ class PageScrapLienCollection(QWidget):
 
         for widget in [self.input_url, self.input_output, self.input_selector]:
             widget.editingFinished.connect(self.save_fields)
+        self.combo_format.currentIndexChanged.connect(self.save_fields)
 
     def start_worker(self) -> None:
         url = self.input_url.text().strip()
         output = Path(self.input_output.text().strip() or "products.txt")
         selector = self.input_selector.text().strip() or scrap_lien_collection.DEFAULT_SELECTOR
         log_level = self.combo_log.currentText()
+        output_format = self.combo_format.currentText()
 
         if not url:
             self.log_view.appendPlainText("Veuillez renseigner l'URL.")
@@ -556,7 +576,7 @@ class PageScrapLienCollection(QWidget):
 
         self.save_fields()
 
-        self.worker = ScrapLienWorker(url, output, selector, log_level)
+        self.worker = ScrapLienWorker(url, output, selector, log_level, output_format)
         self.worker.log.connect(self.log_view.appendPlainText)
         self.worker.finished.connect(self.on_finished)
         self.worker.start()
@@ -576,6 +596,7 @@ class PageScrapLienCollection(QWidget):
         self.manager.save_setting("scrap_lien_url", self.input_url.text())
         self.manager.save_setting("scrap_lien_output", self.input_output.text())
         self.manager.save_setting("scrap_lien_selector", self.input_selector.text())
+        self.manager.save_setting("scrap_lien_format", self.combo_format.currentText())
 
 
 class PageScraperImages(QWidget):
