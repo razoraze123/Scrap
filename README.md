@@ -67,3 +67,15 @@ Après installation des dépendances, lancez simplement :
 ```bash
 pytest
 ```
+
+## Captures d'ecran
+
+L'interface profite maintenant d'icones et d'un style adapte aux ecrans haute densite.
+
+Avant:
+
+![Avant](screenshots/before.svg)
+
+Apres:
+
+![Apres](screenshots/after.svg)
