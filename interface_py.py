@@ -49,6 +49,20 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QFont, QPainter, QColor, QPixmap, QClipboard
 
+# QSplitter might not be available in all test environments
+try:
+    from PySide6.QtWidgets import QSplitter
+except Exception:  # pragma: no cover - used only for stub environments
+    class QSplitter:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def addWidget(self, *args, **kwargs):
+            pass
+
+        def setStretchFactor(self, *args, **kwargs):
+            pass
+
 from alpha_engine import AlphaEngine
 
 import scrap_lien_collection
