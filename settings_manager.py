@@ -19,6 +19,7 @@ DEFAULT_SETTINGS = {
     "scrap_lien_url": "",
     "scrap_lien_output": "products.txt",
     "scrap_lien_selector": "",
+    "scrap_lien_format": "txt",
 
     "images_url": "",
     "images_file": "",
