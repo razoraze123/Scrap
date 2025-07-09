@@ -14,7 +14,7 @@ Un outil Python robuste et évolutif pour scraper automatiquement les images de 
 ✅ Extraction des noms et liens de produits d'une collection (scrap_lien_collection.py) avec sortie au format `txt`, `json` ou `csv`
 ✅ Récupération de la description HTML d'un produit (scrap_description_produit.py)
 ✅ Nouvel onglet "Alpha" combinant variantes et liens WordPress
-✅ Onglet "Alpha + Images" fusionnant Alpha et Scraper Images
+✅ Onglet "Alpha 2" fusionnant Alpha et Scraper Images
 ✅ Profil par défaut appliqué automatiquement si l'URL correspond à Shopify ou WooCommerce
 Exemple : `python scrap_lien_collection.py https://exemple.com/collection --selector "div.product a" --format csv`
 
