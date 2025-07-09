@@ -1314,6 +1314,17 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page_alpha)
         self.stack.addWidget(self.page_settings)
 
+        self.page_images.input_source.editingFinished.connect(
+            lambda: self.profile_manager.detect_and_apply(
+                self.page_images.input_source.text(), self
+            )
+        )
+        self.page_scrap.input_url.editingFinished.connect(
+            lambda: self.profile_manager.detect_and_apply(
+                self.page_scrap.input_url.text(), self
+            )
+        )
+
         self.stack.currentChanged.connect(self.update_title)
 
         # Layout central
