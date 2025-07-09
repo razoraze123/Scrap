@@ -6,16 +6,23 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+from pathlib import Path
+import json
 
 
-def setup_driver(headless: bool = True) -> webdriver.Chrome:
+def setup_driver(headless: bool = True, driver_path: str | None = None) -> webdriver.Chrome:
     """Return a configured Chrome WebDriver.
 
     Parameters
     ----------
     headless: bool
         Run Chrome in headless mode if True (default).
+    driver_path: optional str
+        Path to a ChromeDriver binary to use. If absent or invalid,
+        ``webdriver_manager`` is used to download a driver.
     """
+    driver_path = driver_path or _load_driver_path_from_settings()
+
     options = Options()
     if headless:
         options.add_argument("--headless")
@@ -25,7 +32,10 @@ def setup_driver(headless: bool = True) -> webdriver.Chrome:
     options.add_experimental_option("useAutomationExtension", False)
     options.add_argument("--disable-blink-features=AutomationControlled")
 
-    service = Service(ChromeDriverManager().install())
+    if driver_path and Path(driver_path).is_file():
+        service = Service(str(driver_path))
+    else:
+        service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
 
     # Hide webdriver flag
@@ -34,3 +44,16 @@ def setup_driver(headless: bool = True) -> webdriver.Chrome:
         {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
     )
     return driver
+
+
+def _load_driver_path_from_settings() -> str | None:
+    """Return driver path from settings.json if available."""
+    settings_file = Path("settings.json")
+    if settings_file.is_file():
+        try:
+            data = json.loads(settings_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data.get("driver_path")
+        except Exception:
+            pass
+    return None

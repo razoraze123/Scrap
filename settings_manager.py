@@ -13,6 +13,7 @@ DEFAULT_SETTINGS = {
     "font_size": 13,
     "animations": True,
     "enable_update": True,
+    "driver_path": "",
 
     # Last used values for scrapers
     "scrap_lien_url": "",

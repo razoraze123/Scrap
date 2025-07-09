@@ -1137,6 +1137,10 @@ class PageSettings(QWidget):
         self.checkbox_update.setChecked(manager.settings.get("enable_update", True))
         layout.addWidget(self.checkbox_update)
 
+        self.input_driver_path = QLineEdit(manager.settings.get("driver_path", ""))
+        layout.addWidget(QLabel("Chemin ChromeDriver"))
+        layout.addWidget(self.input_driver_path)
+
         self.button_reset = QPushButton("R\u00e9initialiser les param\u00e8tres")
         layout.addWidget(self.button_reset)
 
@@ -1156,6 +1160,7 @@ class PageSettings(QWidget):
             self.spin_font_size,
             self.checkbox_anim,
             self.checkbox_update,
+            self.input_driver_path,
         ]:
             if isinstance(w, QLineEdit):
                 w.editingFinished.connect(self.update_settings)
@@ -1183,6 +1188,7 @@ class PageSettings(QWidget):
         s["font_size"] = self.spin_font_size.value()
         s["animations"] = self.checkbox_anim.isChecked()
         s["enable_update"] = self.checkbox_update.isChecked()
+        s["driver_path"] = self.input_driver_path.text().strip()
         self.manager.save()
         self.apply_cb()
 
@@ -1198,6 +1204,7 @@ class PageSettings(QWidget):
         self.spin_font_size.setValue(self.manager.settings["font_size"])
         self.checkbox_anim.setChecked(self.manager.settings["animations"])
         self.checkbox_update.setChecked(self.manager.settings.get("enable_update", True))
+        self.input_driver_path.setText(self.manager.settings.get("driver_path", ""))
         self.manager.save()
         self.apply_cb()
 

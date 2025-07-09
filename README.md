@@ -55,6 +55,9 @@ Adaptez ensuite `settings.json` en fonction de vos préférences. Ce fichier de 
 🔄 Mise à jour de l'application
 Un bouton "Mettre à jour l'app" exécute `git pull` puis redémarre le programme. L'opération nécessite une connexion réseau et peut entraîner des conflits si vous avez modifié le code localement. Une confirmation est demandée avant l'exécution et les erreurs réseau sont affichées clairement. Vous pouvez désactiver cette fonctionnalité en plaçant `"enable_update": false` dans `settings.json`.
 
+🛜 Mode hors-ligne
+Si votre machine n'a pas accès à internet, renseignez le chemin vers un ChromeDriver déjà installé en local via la clé `"driver_path"` de `settings.json`. L'application utilisera alors ce binaire au lieu de tenter un téléchargement automatique.
+
 🗒️ Suivi des audits
 Les rapports d'audit sont enregistrés dans `compte_rendu.txt`. Mettez ce fichier à jour à chaque nouvel audit. Pour consulter les derniers résultats, ouvrez `compte_rendu.txt` ou exécutez `cat compte_rendu.txt` dans votre terminal.
 
