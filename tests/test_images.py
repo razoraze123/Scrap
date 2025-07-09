@@ -151,3 +151,35 @@ def test_load_alt_sentences_cache(tmp_path, monkeypatch):
     si._load_alt_sentences(path)
 
     assert calls == [1]
+
+
+def test_download_images_same_names_on_repeat(tmp_path, monkeypatch):
+    elem = ElementDataSrc()
+
+    monkeypatch.setattr(si, "WebDriverWait", DummyWait)
+    monkeypatch.setattr(si, "EC", DummyEC)
+    monkeypatch.setattr("driver_utils.setup_driver", lambda: DummyDriver([elem]))
+    monkeypatch.setattr(si, "setup_driver", lambda: DummyDriver([elem]))
+    monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
+    monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
+
+    res1 = si.download_images(
+        "http://example.com",
+        css_selector="img",
+        parent_dir=tmp_path,
+        use_alt_json=False,
+    )
+    files1 = sorted(p.name for p in res1["folder"].iterdir())
+
+    for p in res1["folder"].iterdir():
+        p.unlink()
+
+    res2 = si.download_images(
+        "http://example.com",
+        css_selector="img",
+        parent_dir=tmp_path,
+        use_alt_json=False,
+    )
+    files2 = sorted(p.name for p in res2["folder"].iterdir())
+
+    assert files1 == files2
