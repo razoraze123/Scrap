@@ -1403,6 +1403,7 @@ class MainWindow(QMainWindow):
         self.sidebar = QWidget()
         side_layout = QVBoxLayout(self.sidebar)
         side_layout.setContentsMargins(0, 0, 0, 0)
+
         self.side_buttons: list[QToolButton] = []
         for i, (text, icon) in enumerate(zip(labels, self.icon_paths)):
             section = CollapsibleSection(
@@ -1418,6 +1419,12 @@ class MainWindow(QMainWindow):
         self.toolbar = QToolBar()
         self.toolbar.setMovable(False)
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)
+
+        self.toggle_sidebar_btn = QToolButton()
+        self.toggle_sidebar_btn.setArrowType(Qt.LeftArrow)
+        self.toggle_sidebar_btn.clicked.connect(self.toggle_sidebar)
+        self.toolbar.addWidget(self.toggle_sidebar_btn)
+
         self.label_title = QToolButton()
         self.label_title.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.label_title.setIcon(QIcon(str(self.icon_paths[0])))
@@ -1463,16 +1470,22 @@ class MainWindow(QMainWindow):
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
+
         self.sidebar.setFixedWidth(180)
         self.scroll_area = QScrollArea()
         self.scroll_area.setFrameShape(QFrame.NoFrame)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.stack)
-        layout.addWidget(self.sidebar)
-        layout.addWidget(self.scroll_area)
-        layout.setStretch(0, 0)
-        layout.setStretch(1, 1)
+
+        # Splitter to allow sidebar resizing
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.addWidget(self.sidebar)
+        self.splitter.addWidget(self.scroll_area)
+        self.splitter.setStretchFactor(1, 1)
+        layout.addWidget(self.splitter)
         self.setCentralWidget(container)
+
+        self.sidebar_visible = True
 
         # Set initial page
         self.show_page(0)
@@ -1492,6 +1505,13 @@ class MainWindow(QMainWindow):
         if 0 <= index < len(self.side_buttons):
             self.label_title.setText(self.side_buttons[index].text())
             self.label_title.setIcon(QIcon(str(self.icon_paths[index])))
+
+    def toggle_sidebar(self) -> None:
+        """Show or hide the sidebar and update arrow direction."""
+        self.sidebar_visible = not self.sidebar_visible
+        self.sidebar.setVisible(self.sidebar_visible)
+        arrow = Qt.LeftArrow if self.sidebar_visible else Qt.RightArrow
+        self.toggle_sidebar_btn.setArrowType(arrow)
 
     def apply_settings(self) -> None:
         apply_settings(QApplication.instance(), self.settings.settings)
