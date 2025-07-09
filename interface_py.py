@@ -143,6 +143,41 @@ class ToggleSwitch(QCheckBox):
         painter.drawEllipse(QRect(self._offset, 2, self.height() - 4, self.height() - 4))
 
 
+class CollapsibleSection(QWidget):
+    """Simple collapsible section used for the sidebar."""
+
+    def __init__(self, title: str, icon: QIcon, callback) -> None:
+        super().__init__()
+        self._title = title
+        self._callback = callback
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.header = QToolButton()
+        self.header.setText(f"\u25B6 {title}")
+        self.header.setIcon(icon)
+        self.header.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.header.clicked.connect(self.toggle)
+        layout.addWidget(self.header)
+
+        self.container = QWidget()
+        container_layout = QVBoxLayout(self.container)
+        container_layout.setContentsMargins(20, 0, 0, 0)
+        self.page_button = QToolButton(text=title)
+        self.page_button.setIcon(icon)
+        self.page_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.page_button.setCheckable(True)
+        self.page_button.clicked.connect(callback)
+        container_layout.addWidget(self.page_button)
+        layout.addWidget(self.container)
+        self.container.setVisible(False)
+
+    def toggle(self) -> None:
+        visible = not self.container.isVisible()
+        self.container.setVisible(visible)
+        arrow = "\u25BC" if visible else "\u25B6"
+        self.header.setText(f"{arrow} {self._title}")
+
 class ScrapLienWorker(QThread):
     log = Signal(str)
     finished = Signal()
@@ -1370,15 +1405,13 @@ class MainWindow(QMainWindow):
         side_layout.setContentsMargins(0, 0, 0, 0)
         self.side_buttons: list[QToolButton] = []
         for i, (text, icon) in enumerate(zip(labels, self.icon_paths)):
-            btn = QToolButton(text=text)
-            btn.setIcon(QIcon(str(icon)))
-            btn.setIconSize(QSize(24, 24))
-            btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-            btn.setCheckable(True)
-            btn.setAutoExclusive(True)
-            btn.clicked.connect(lambda checked, i=i: self.show_page(i))
-            side_layout.addWidget(btn)
-            self.side_buttons.append(btn)
+            section = CollapsibleSection(
+                text,
+                QIcon(str(icon)),
+                lambda checked=False, i=i: self.show_page(i),
+            )
+            side_layout.addWidget(section)
+            self.side_buttons.append(section.page_button)
         side_layout.addStretch()
 
         # Top bar
@@ -1442,7 +1475,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
 
         # Set initial page
-        self.side_buttons[0].setChecked(True)
         self.show_page(0)
 
         self.apply_settings()
@@ -1451,7 +1483,8 @@ class MainWindow(QMainWindow):
         """Display page at given index."""
         self.stack.setCurrentIndex(index)
         if 0 <= index < len(self.side_buttons):
-            self.side_buttons[index].setChecked(True)
+            for i, btn in enumerate(self.side_buttons):
+                btn.setChecked(i == index)
         self.update_title(index)
 
     def update_title(self, index: int) -> None:
