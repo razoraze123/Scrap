@@ -16,6 +16,10 @@ Un outil Python robuste et évolutif pour scraper automatiquement les images de 
 ✅ Nouvel onglet "Alpha" combinant variantes et liens WordPress
 Exemple : `python scrap_lien_collection.py https://exemple.com/collection --selector "div.product a"`
 
+### Utilisation du scraper d'images
+Exemple : `python scraper_images.py https://exemple.com/produit --max-threads 8`
+L'option `--max-threads` définit le nombre maximal de téléchargements parallèles (4 par défaut).
+
 Pour tester ou générer rapidement un sélecteur CSS depuis un extrait HTML,
 utilisez `find_css_selector.py`. En ligne de commande :
 

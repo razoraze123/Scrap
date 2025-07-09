@@ -24,6 +24,7 @@ DEFAULT_SETTINGS = {
     "images_dest": "images",
     "images_selector": "",
     "images_alt_json": "product_sentences.json",
+    "images_max_threads": 4,
 
     "desc_url": "",
     "desc_selector": "",
