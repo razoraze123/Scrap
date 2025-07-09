@@ -34,6 +34,10 @@ DEFAULT_SETTINGS = {
     "desc_selector": "",
     "desc_output": "description.html",
 
+    "price_url": "",
+    "price_selector": "",
+    "price_output": "price.txt",
+
     "variant_url": "",
     "variant_selector": "",
     "variant_output": "variants.txt",
