@@ -54,6 +54,24 @@ from settings_manager import SettingsManager, apply_settings
 from site_profile_manager import SiteProfileManager
 
 
+try:
+    from PySide6.QtCore import QSize  # type: ignore
+except Exception:  # pragma: no cover - fallback for tests
+    class QSize:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+try:
+    from PySide6.QtGui import QIcon  # type: ignore
+except Exception:  # pragma: no cover - fallback for tests
+    class QIcon:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+
+ICONS_DIR = Path(__file__).resolve().parent / "icons"
+
+
 def load_stylesheet(path: str = "style.qss") -> None:
     """Apply the application's stylesheet if available."""
     app = QApplication.instance()
@@ -1318,12 +1336,27 @@ class MainWindow(QMainWindow):
             "Param\u00e8tres",
         ]
 
+        icon_names = [
+            "profile.svg",
+            "links.svg",
+            "images.svg",
+            "description.svg",
+            "linkgen.svg",
+            "variant.svg",
+            "alpha.svg",
+            "settings.svg",
+        ]
+        self.icon_paths = [ICONS_DIR / name for name in icon_names]
+
         self.sidebar = QWidget()
         side_layout = QVBoxLayout(self.sidebar)
         side_layout.setContentsMargins(0, 0, 0, 0)
         self.side_buttons: list[QToolButton] = []
-        for i, text in enumerate(labels):
+        for i, (text, icon) in enumerate(zip(labels, self.icon_paths)):
             btn = QToolButton(text=text)
+            btn.setIcon(QIcon(str(icon)))
+            btn.setIconSize(QSize(24, 24))
+            btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             btn.setCheckable(True)
             btn.setAutoExclusive(True)
             btn.clicked.connect(lambda checked, i=i: self.show_page(i))
@@ -1335,7 +1368,12 @@ class MainWindow(QMainWindow):
         self.toolbar = QToolBar()
         self.toolbar.setMovable(False)
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)
-        self.label_title = QLabel(labels[0])
+        self.label_title = QToolButton()
+        self.label_title.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.label_title.setIcon(QIcon(str(self.icon_paths[0])))
+        self.label_title.setIconSize(QSize(24, 24))
+        self.label_title.setText(labels[0])
+        self.label_title.setEnabled(False)
         self.toolbar.addWidget(self.label_title)
 
         self.stack = QStackedWidget()
@@ -1394,6 +1432,7 @@ class MainWindow(QMainWindow):
         """Update title label when page changes."""
         if 0 <= index < len(self.side_buttons):
             self.label_title.setText(self.side_buttons[index].text())
+            self.label_title.setIcon(QIcon(str(self.icon_paths[index])))
 
     def apply_settings(self) -> None:
         apply_settings(QApplication.instance(), self.settings.settings)
