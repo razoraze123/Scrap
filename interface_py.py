@@ -7,6 +7,8 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -171,6 +173,7 @@ class ScraperImagesWorker(QThread):
         show_preview: bool,
         alt_json: str | None,
         max_threads: int = 4,
+        max_jobs: int = 1,
     ):
         super().__init__()
         self.urls = urls
@@ -180,6 +183,7 @@ class ScraperImagesWorker(QThread):
         self.show_preview = show_preview
         self.alt_json = alt_json
         self.max_threads = max_threads
+        self.max_jobs = max_jobs
 
     def run(self) -> None:
         logger = logging.getLogger()
@@ -191,38 +195,55 @@ class ScraperImagesWorker(QThread):
         try:
             images_done = 0
             total_images = 0
+            lock = threading.Lock()
 
             def make_cb() -> Callable[[int, int], None]:
                 first = True
 
                 def cb(i: int, t: int) -> None:
                     nonlocal first, images_done, total_images
-                    if first:
-                        total_images += t
-                        first = False
-                    images_done += 1
-                    self.progress.emit(images_done, total_images)
+                    with lock:
+                        if first:
+                            total_images += t
+                            first = False
+                        images_done += 1
+                        self.progress.emit(images_done, total_images)
 
                 return cb
 
             self.progress.emit(0, 0)
 
             preview_sent = False
-            for url in self.urls:
-                info = scraper_images.download_images(
-                    url,
-                    css_selector=self.selector,
-                    parent_dir=self.parent_dir,
-                    progress_callback=make_cb(),
-                    alt_json_path=self.alt_json,
-                    max_threads=self.max_threads,
-                )
-                folder = info["folder"]
-                if self.show_preview and not preview_sent and info.get("first_image"):
-                    self.preview_path.emit(str(info["first_image"]))
-                    preview_sent = True
-                if self.open_folder:
-                    scraper_images._open_folder(folder)
+            with ThreadPoolExecutor(max_workers=self.max_jobs) as executor:
+                future_to_url = {
+                    executor.submit(
+                        scraper_images.download_images,
+                        url,
+                        css_selector=self.selector,
+                        parent_dir=self.parent_dir,
+                        progress_callback=make_cb(),
+                        alt_json_path=self.alt_json,
+                        max_threads=self.max_threads,
+                    ): url
+                    for url in self.urls
+                }
+
+                for fut in as_completed(future_to_url):
+                    url = future_to_url[fut]
+                    try:
+                        info = fut.result()
+                        folder = info["folder"]
+                        if (
+                            self.show_preview
+                            and not preview_sent
+                            and info.get("first_image")
+                        ):
+                            self.preview_path.emit(str(info["first_image"]))
+                            preview_sent = True
+                        if self.open_folder:
+                            scraper_images._open_folder(folder)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.error("%s", exc)
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
         finally:
