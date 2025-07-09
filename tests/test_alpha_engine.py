@@ -166,6 +166,18 @@ def test_start_analysis_success(monkeypatch):
         "Blue -> https://wp/wp-content/uploads/2024/05/blue.png",
         "Analyse terminée.",
     ]
+    assert eng._export_rows == [
+        {
+            "Product": "Title",
+            "Variant": "Red",
+            "Image": "https://wp/wp-content/uploads/2024/05/red.jpg",
+        },
+        {
+            "Product": "Title",
+            "Variant": "Blue",
+            "Image": "https://wp/wp-content/uploads/2024/05/blue.png",
+        },
+    ]
 
 
 def test_start_analysis_error(monkeypatch):
@@ -197,3 +209,34 @@ def test_build_wp_url_strip_digits(monkeypatch):
         url
         == "https://wp/wp-content/uploads/2024/05/bob-ficelle-outdoor-beige.png"
     )
+
+
+def test_export_csv(monkeypatch, tmp_path):
+    mod = load_module(monkeypatch)
+    eng = mod.AlphaEngine()
+    eng._export_rows = [
+        {"Product": "T", "Variant": "V", "Image": "L"},
+    ]
+
+    def fake_get(*a, **k):
+        return str(tmp_path / "out.csv"), ""
+
+    monkeypatch.setattr(mod.QFileDialog, "getSaveFileName", staticmethod(fake_get))
+
+    calls = {}
+
+    class DummyPandas:
+        class DataFrame:
+            def __init__(self, data):
+                calls["data"] = data
+            def to_csv(self, path, index=False):
+                calls["path"] = path
+                calls["index"] = index
+
+    monkeypatch.setitem(sys.modules, "pandas", DummyPandas)
+
+    eng.export_csv()
+
+    assert calls["data"] == eng._export_rows
+    assert calls["path"] == str(tmp_path / "out.csv")
+    assert calls["index"] is False

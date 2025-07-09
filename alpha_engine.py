@@ -49,6 +49,7 @@ class AlphaEngine(QWidget):
         super().__init__(parent)
 
         layout = QVBoxLayout(self)
+        self._export_rows: list[dict[str, str]] = []
 
         self.input_url = QLineEdit()
         self.input_url.setPlaceholderText("URL du produit")
@@ -118,10 +119,14 @@ class AlphaEngine(QWidget):
         date_path = self.input_date.text().strip()
 
         self.result_view.clear()
+        self._export_rows = []
         self.result_view.append(title)
         for name, img in variants.items():
             wp_url = self._build_wp_url(domain, date_path, img)
             self.result_view.append(f"{name} -> {wp_url}")
+            self._export_rows.append(
+                {"Product": title, "Variant": name, "Image": wp_url}
+            )
 
     def _show_error(self, msg: str) -> None:
         QMessageBox.critical(self, "Erreur", msg)
@@ -139,7 +144,7 @@ class AlphaEngine(QWidget):
             return
         import pandas as pd  # Imported lazily to avoid mandatory dependency
 
-        df = pd.DataFrame({"data": [self.result_view.toPlainText()]})
+        df = pd.DataFrame(self._export_rows)
         try:
             df.to_excel(path, index=False)
         except Exception as exc:  # noqa: BLE001
@@ -156,7 +161,7 @@ class AlphaEngine(QWidget):
             return
         import pandas as pd  # Imported lazily to avoid mandatory dependency
 
-        df = pd.DataFrame({"data": [self.result_view.toPlainText()]})
+        df = pd.DataFrame(self._export_rows)
         try:
             df.to_csv(path, index=False)
         except Exception as exc:  # noqa: BLE001
