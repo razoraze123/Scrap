@@ -44,6 +44,9 @@ USE_ALT_JSON = True
 
 logger = logging.getLogger(__name__)
 
+# Reserved paths to avoid name collisions during concurrent downloads
+_RESERVED_PATHS: set[Path] = set()
+
 
 def _safe_folder(product_name: str, base_dir: Path | str = "images") -> Path:
     """Return a Path object for the folder where images will be saved."""
@@ -101,9 +104,10 @@ def _unique_path(folder: Path, filename: str) -> Path:
     base, ext = os.path.splitext(filename)
     candidate = folder / filename
     counter = 1
-    while candidate.exists():
+    while candidate.exists() or candidate in _RESERVED_PATHS:
         candidate = folder / f"{base}_{counter}{ext}"
         counter += 1
+    _RESERVED_PATHS.add(candidate)
     return candidate
 
 
