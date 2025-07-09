@@ -18,8 +18,8 @@ def setup_pyside(monkeypatch):
         "QApplication","QMainWindow","QWidget","QListWidget","QStackedWidget",
         "QHBoxLayout","QVBoxLayout","QLineEdit","QComboBox","QPushButton",
         "QPlainTextEdit","QLabel","QProgressBar","QFileDialog","QCheckBox",
-        "QSpinBox","QFontComboBox","QTextEdit","QMessageBox","QToolBar",
-        "QToolButton","QScrollArea","QSizePolicy","QFrame",
+        "QSpinBox","QFontComboBox","QTextEdit","QGroupBox","QMessageBox",
+        "QToolBar","QToolButton","QScrollArea","QSizePolicy","QFrame",
     ]:
         setattr(qtwidgets, name, type(name, (), {}))
 

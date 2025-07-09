@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import time
+import re
 from pathlib import Path
 from typing import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QFontComboBox,
     QTextEdit,
+    QGroupBox,
     QMessageBox,
     QToolBar,
     QToolButton,
@@ -371,6 +373,34 @@ class ScrapVariantWorker(QThread):
         try:
             title, mapping = moteur_variante.extract_variants_with_images(self.url)
             moteur_variante.save_images_to_file(title, mapping, self.output)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("%s", exc)
+        finally:
+            logger.removeHandler(handler)
+            self.finished.emit()
+
+
+class VariantFetchWorker(QThread):
+    """Fetch product variants with images and emit results."""
+
+    log = Signal(str)
+    result = Signal(str, dict)
+    finished = Signal()
+
+    def __init__(self, url: str) -> None:
+        super().__init__()
+        self.url = url
+
+    def run(self) -> None:
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+        handler = QtLogHandler(self.log)
+        formatter = logging.Formatter("%(levelname)s: %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        try:
+            title, mapping = moteur_variante.extract_variants_with_images(self.url)
+            self.result.emit(title, mapping)
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
         finally:
@@ -1175,16 +1205,233 @@ class PageLinkGenerator(QWidget):
         self.manager.save_setting("linkgen_folder", self.folder_path)
 
 
-class PageAlphaScraper(QWidget):
-    """Combine AlphaEngine and PageScraperImages."""
+class Alpha2Widget(QWidget):
+    """Scrape images then variants using a single URL."""
 
     def __init__(self, manager: SettingsManager) -> None:
         super().__init__()
-        layout = QVBoxLayout(self)
-        self.alpha = AlphaEngine()
-        self.scraper = PageScraperImages(manager)
-        layout.addWidget(self.alpha)
-        layout.addWidget(self.scraper)
+        self.manager = manager
+        self._export_rows: list[dict[str, str]] = []
+
+        main_layout = QVBoxLayout(self)
+
+        # --- Inputs -----------------------------------------------------
+        group_inputs = QGroupBox("Entrées utilisateur")
+        inputs_layout = QVBoxLayout(group_inputs)
+
+        self.input_url = QLineEdit(manager.settings.get("alpha2_url", ""))
+        self.input_url.setPlaceholderText("URL du produit")
+        inputs_layout.addWidget(QLabel("URL du produit"))
+        inputs_layout.addWidget(self.input_url)
+
+        dir_layout = QHBoxLayout()
+        self.input_dir = QLineEdit(manager.settings.get("alpha2_parent", "images"))
+        dir_layout.addWidget(self.input_dir)
+        self.button_dir = QPushButton("\U0001F4C2 Choisir dossier")
+        self.button_dir.clicked.connect(self.browse_dir)
+        dir_layout.addWidget(self.button_dir)
+        inputs_layout.addWidget(QLabel("Dossier parent"))
+        inputs_layout.addLayout(dir_layout)
+
+        self.spin_threads = QSpinBox()
+        self.spin_threads.setRange(1, 32)
+        self.spin_threads.setValue(manager.settings.get("alpha2_threads", 3))
+        inputs_layout.addWidget(QLabel("Threads parallèles"))
+        inputs_layout.addWidget(self.spin_threads)
+        inputs_layout.addStretch()
+
+        # --- Actions ----------------------------------------------------
+        group_actions = QGroupBox("Actions")
+        actions_layout = QVBoxLayout(group_actions)
+        self.button_start = QPushButton("Lancer le Scraping complet")
+        self.button_start.clicked.connect(self.start_full_scraping)
+        self.button_delete = QPushButton("Supprimer les dossiers")
+        self.button_delete.clicked.connect(self.delete_folders)
+        actions_layout.addWidget(self.button_start)
+        actions_layout.addWidget(self.button_delete)
+        actions_layout.addStretch()
+
+        # --- State & Console -------------------------------------------
+        group_state = QGroupBox("État & Console")
+        state_layout = QVBoxLayout(group_state)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        state_layout.addWidget(self.progress)
+        self.label_timer = QLabel("Temps restant : ...")
+        state_layout.addWidget(self.label_timer)
+        self.button_toggle_console = QPushButton("Masquer la console")
+        self.button_toggle_console.clicked.connect(self.toggle_console)
+        state_layout.addWidget(self.button_toggle_console)
+        self.log_view = QPlainTextEdit(readOnly=True)
+        state_layout.addWidget(self.log_view)
+        state_layout.addStretch()
+
+        # --- Export -----------------------------------------------------
+        group_export = QGroupBox("Export")
+        export_layout = QVBoxLayout(group_export)
+        self.button_export = QPushButton("Exporter Excel")
+        self.button_export.clicked.connect(self.export_excel)
+        export_layout.addWidget(self.button_export)
+        export_layout.addStretch()
+
+        main_layout.addWidget(group_inputs)
+        main_layout.addWidget(group_actions)
+        main_layout.addWidget(group_state)
+        main_layout.addWidget(group_export)
+        main_layout.addStretch()
+
+        self.images_worker: ScraperImagesWorker | None = None
+        self.variant_worker: VariantFetchWorker | None = None
+
+        for w in [self.input_url, self.input_dir]:
+            w.editingFinished.connect(self.save_fields)
+        self.spin_threads.valueChanged.connect(self.save_fields)
+
+    # --- Slots ---------------------------------------------------------
+    def browse_dir(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Sélectionner un dossier")
+        if directory:
+            self.input_dir.setText(directory)
+            self.save_fields()
+
+    def start_full_scraping(self) -> None:
+        url = self.input_url.text().strip()
+        if not url:
+            self.log_view.appendPlainText("Veuillez renseigner l'URL.")
+            return
+
+        dest = Path(self.input_dir.text().strip() or "images")
+        selector = self.manager.settings.get(
+            "images_selector",
+            scraper_images.DEFAULT_CSS_SELECTOR,
+        )
+
+        self.button_start.setEnabled(False)
+        self.progress.setValue(0)
+        self.log_view.clear()
+
+        self.save_fields()
+
+        self.images_worker = ScraperImagesWorker(
+            [url],
+            dest,
+            selector,
+            False,
+            False,
+            None,
+            self.spin_threads.value(),
+        )
+        self.images_worker.log.connect(self.log_view.appendPlainText)
+        self.images_worker.progress.connect(self.update_progress)
+        self.images_worker.finished.connect(self.start_variant_phase)
+
+        self.images_done = 0
+        self.total_images = 0
+        self.start_time = time.perf_counter()
+        self.images_worker.start()
+
+    def start_variant_phase(self) -> None:
+        url = self.input_url.text().strip()
+        self.variant_worker = VariantFetchWorker(url)
+        self.variant_worker.log.connect(self.log_view.appendPlainText)
+        self.variant_worker.result.connect(self.process_variants)
+        self.variant_worker.finished.connect(self.on_variant_finished)
+        self.variant_worker.start()
+
+    def process_variants(self, title: str, mapping: dict) -> None:
+        domain = self.manager.settings.get("linkgen_base_url", "https://example.com")
+        date_path = self.manager.settings.get("linkgen_date", "2025/07")
+        self._export_rows = []
+        self.log_view.appendPlainText(title)
+        for name, img in mapping.items():
+            wp_url = self._build_wp_url(domain, date_path, img)
+            self.log_view.appendPlainText(f"{name} -> {wp_url}")
+            self._export_rows.append({"Product": title, "Variant": name, "Image": wp_url})
+
+    def update_progress(self, done: int, total: int) -> None:
+        self.images_done = done
+        self.total_images = total
+        value = int(done / total * 100) if total else 0
+        self.progress.setValue(value)
+        if done == 0 or total == 0:
+            self.label_timer.setText("Temps restant : ...")
+            return
+        elapsed = time.perf_counter() - self.start_time
+        average = elapsed / done
+        remaining = (total - done) * average
+        if remaining >= 60:
+            minutes = int(remaining / 60 + 0.5)
+            self.label_timer.setText(f"Temps restant : {minutes} minute(s)")
+        else:
+            seconds = int(remaining + 0.5)
+            self.label_timer.setText(f"Temps restant : {seconds} seconde(s)")
+
+    def toggle_console(self) -> None:
+        visible = self.log_view.isVisible()
+        self.log_view.setVisible(not visible)
+        self.button_toggle_console.setText(
+            "Afficher la console" if visible else "Masquer la console"
+        )
+
+    def on_variant_finished(self) -> None:
+        self.button_start.setEnabled(True)
+        self.label_timer.setText("Temps restant : 0 seconde(s)")
+        QMessageBox.information(self, "Terminé", "Le scraping complet est terminé.")
+        self.progress.setValue(0)
+
+    def delete_folders(self) -> None:
+        dest = Path(self.input_dir.text().strip() or "images")
+        if not dest.exists():
+            QMessageBox.information(self, "Info", "Le dossier spécifié n'existe pas.")
+            return
+        reply = QMessageBox.question(
+            self,
+            "Confirmer la suppression",
+            f"Supprimer tout le contenu de {dest} ?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            for child in dest.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child)
+            QMessageBox.information(self, "Supprimé", "Les dossiers ont été supprimés.")
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Erreur", f"Erreur lors de la suppression : {exc}")
+
+    def export_excel(self) -> None:
+        if not self._export_rows:
+            QMessageBox.warning(self, "Erreur", "Aucune donnée à exporter.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Enregistrer sous", "resultats.xlsx", "Excel (*.xlsx)"
+        )
+        if not path:
+            return
+        import pandas as pd
+
+        df = pd.DataFrame(self._export_rows)
+        try:
+            df.to_excel(path, index=False)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, "Erreur", str(exc))
+        else:
+            QMessageBox.information(self, "Exporté", "Fichier enregistré")
+
+    def save_fields(self) -> None:
+        self.manager.save_setting("alpha2_url", self.input_url.text())
+        self.manager.save_setting("alpha2_parent", self.input_dir.text())
+        self.manager.save_setting("alpha2_threads", self.spin_threads.value())
+
+    @staticmethod
+    def _build_wp_url(domain: str, date_path: str, img_url: str) -> str:
+        filename = img_url.split("/")[-1].split("?")[0]
+        filename = re.sub(r"-\d+(?=\.\w+$)", "", filename)
+        domain = domain.rstrip("/")
+        date_path = date_path.strip("/")
+        return f"{domain}/wp-content/uploads/{date_path}/{filename}"
+
 
 
 class PageSettings(QWidget):
@@ -1441,7 +1688,7 @@ class MainWindow(QMainWindow):
         self.page_linkgen = PageLinkGenerator(settings)
         self.page_variants = PageVariantScraper(settings)
         self.page_alpha = AlphaEngine()
-        self.page_alpha_scraper = PageAlphaScraper(settings)
+        self.page_alpha2 = Alpha2Widget(settings)
         self.page_settings = PageSettings(settings, self.apply_settings)
         self.stack.addWidget(self.page_profiles)
         self.stack.addWidget(self.page_scrap)
@@ -1450,7 +1697,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page_linkgen)
         self.stack.addWidget(self.page_variants)
         self.stack.addWidget(self.page_alpha)
-        self.stack.addWidget(self.page_alpha_scraper)
+        self.stack.addWidget(self.page_alpha2)
         self.stack.addWidget(self.page_settings)
 
         self.page_images.input_source.editingFinished.connect(
