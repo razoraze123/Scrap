@@ -14,6 +14,7 @@ DEFAULT_SETTINGS = {
     "animations": True,
     "enable_update": True,
     "driver_path": "",
+    "headless": True,
 
     # Last used values for scrapers
     "scrap_lien_url": "",
