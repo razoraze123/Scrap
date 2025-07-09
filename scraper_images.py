@@ -255,6 +255,7 @@ def download_images(
     max_threads: int = 4,
 ) -> dict:
     """Download all images from *url* and return folder and first image."""
+    _RESERVED_PATHS.clear()
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
 
