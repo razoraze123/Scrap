@@ -10,6 +10,7 @@
   "animations": true,
   "enable_update": true,
   "driver_path": "",
+  "user_agent": "ScrapImageBot/1.0",
 
   "scrap_lien_url": "",
   "scrap_lien_output": "products.txt",

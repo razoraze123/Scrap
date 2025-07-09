@@ -248,7 +248,7 @@ def download_images(
     css_selector: str = DEFAULT_CSS_SELECTOR,
     parent_dir: Path | str = "images",
     progress_callback: Optional[Callable[[int, int], None]] = None,
-    user_agent: str = USER_AGENT,
+    user_agent: str | None = None,
     use_alt_json: bool = USE_ALT_JSON,
     *,
     alt_json_path: str | Path | None = None,
@@ -256,6 +256,16 @@ def download_images(
 ) -> dict:
     """Download all images from *url* and return folder and first image."""
     _RESERVED_PATHS.clear()
+    if user_agent is None:
+        try:
+            path = Path("settings.json")
+            if path.is_file():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                user_agent = data.get("user_agent", USER_AGENT)
+            else:
+                user_agent = USER_AGENT
+        except Exception:
+            user_agent = USER_AGENT
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
 

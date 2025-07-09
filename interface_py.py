@@ -1502,6 +1502,12 @@ class PageSettings(QWidget):
         layout.addWidget(QLabel("Chemin ChromeDriver"))
         layout.addWidget(self.input_driver_path)
 
+        self.input_user_agent = QLineEdit(
+            manager.settings.get("user_agent", scraper_images.USER_AGENT)
+        )
+        layout.addWidget(QLabel("User-Agent"))
+        layout.addWidget(self.input_user_agent)
+
         self.button_reset = QPushButton("R\u00e9initialiser les param\u00e8tres")
         layout.addWidget(self.button_reset)
 
@@ -1523,6 +1529,7 @@ class PageSettings(QWidget):
             self.checkbox_update,
             self.checkbox_headless,
             self.input_driver_path,
+            self.input_user_agent,
         ]:
             if isinstance(w, QLineEdit):
                 w.editingFinished.connect(self.update_settings)
@@ -1552,7 +1559,9 @@ class PageSettings(QWidget):
         s["enable_update"] = self.checkbox_update.isChecked()
         s["headless"] = self.checkbox_headless.isChecked()
         s["driver_path"] = self.input_driver_path.text().strip()
+        s["user_agent"] = self.input_user_agent.text().strip() or scraper_images.USER_AGENT
         self.manager.save_setting("headless", s["headless"])
+        self.manager.save_setting("user_agent", s["user_agent"])
         self.manager.save()
         self.apply_cb()
 
@@ -1570,6 +1579,9 @@ class PageSettings(QWidget):
         self.checkbox_update.setChecked(self.manager.settings.get("enable_update", True))
         self.checkbox_headless.setChecked(self.manager.settings.get("headless", True))
         self.input_driver_path.setText(self.manager.settings.get("driver_path", ""))
+        self.input_user_agent.setText(
+            self.manager.settings.get("user_agent", scraper_images.USER_AGENT)
+        )
         self.manager.save()
         self.apply_cb()
 

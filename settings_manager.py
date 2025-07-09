@@ -15,6 +15,7 @@ DEFAULT_SETTINGS = {
     "enable_update": True,
     "driver_path": "",
     "headless": True,
+    "user_agent": "ScrapImageBot/1.0",
 
     # Last used values for scrapers
     "scrap_lien_url": "",
