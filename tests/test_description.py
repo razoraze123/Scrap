@@ -47,3 +47,10 @@ def test_extract_html_description(monkeypatch):
 
     html = sdp.extract_html_description("https://example.com", "div")
     assert html == "<p>desc</p>"
+
+
+def test_save_html_to_file_creates_parent(tmp_path):
+    dest = tmp_path / "sub" / "desc.html"
+    sdp.save_html_to_file("<p>test</p>", dest)
+    assert dest.exists()
+    assert dest.read_text(encoding="utf-8") == "<p>test</p>"
