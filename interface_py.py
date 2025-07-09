@@ -32,6 +32,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QToolBar,
     QToolButton,
+    QScrollArea,
+    QSizePolicy,
+    QFrame,
 )
 from PySide6.QtCore import (
     QThread,
@@ -1345,7 +1348,7 @@ class MainWindow(QMainWindow):
             "G\u00e9n\u00e9rateur de lien",
             "Moteur Variante",
             "Alpha",
-            "Alpha + Images",
+            "Alpha 2",
             "Param\u00e8tres",
         ]
 
@@ -1423,12 +1426,19 @@ class MainWindow(QMainWindow):
 
         self.stack.currentChanged.connect(self.update_title)
 
-        # Layout central
+        # Layout central avec scroll
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
+        self.sidebar.setFixedWidth(180)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setWidget(self.stack)
         layout.addWidget(self.sidebar)
-        layout.addWidget(self.stack)
+        layout.addWidget(self.scroll_area)
+        layout.setStretch(0, 0)
+        layout.setStretch(1, 1)
         self.setCentralWidget(container)
 
         # Set initial page
