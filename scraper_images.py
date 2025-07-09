@@ -403,6 +403,13 @@ def main() -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Niveau de logging (defaut: %(default)s)",
     )
+    parser.add_argument(
+        "--max-threads",
+        type=int,
+        default=4,
+        help="Nombre maximal de threads pour les telechargements"
+        " (defaut: %(default)s)",
+    )
     parser.set_defaults(use_alt_json=USE_ALT_JSON)
     args = parser.parse_args()
 
@@ -436,6 +443,7 @@ def main() -> None:
                 user_agent=args.user_agent,
                 use_alt_json=args.use_alt_json,
                 alt_json_path=args.alt_json_path,
+                max_threads=args.max_threads,
             )
             if args.preview:
                 _open_folder(info["folder"])

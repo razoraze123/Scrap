@@ -162,7 +162,16 @@ class ScraperImagesWorker(QThread):
     finished = Signal()
     preview_path = Signal(str)
 
-    def __init__(self, urls: list[str], parent_dir: Path, selector: str, open_folder: bool, show_preview: bool, alt_json: str | None):
+    def __init__(
+        self,
+        urls: list[str],
+        parent_dir: Path,
+        selector: str,
+        open_folder: bool,
+        show_preview: bool,
+        alt_json: str | None,
+        max_threads: int = 4,
+    ):
         super().__init__()
         self.urls = urls
         self.parent_dir = parent_dir
@@ -170,6 +179,7 @@ class ScraperImagesWorker(QThread):
         self.open_folder = open_folder
         self.show_preview = show_preview
         self.alt_json = alt_json
+        self.max_threads = max_threads
 
     def run(self) -> None:
         logger = logging.getLogger()
@@ -205,6 +215,7 @@ class ScraperImagesWorker(QThread):
                     parent_dir=self.parent_dir,
                     progress_callback=make_cb(),
                     alt_json_path=self.alt_json,
+                    max_threads=self.max_threads,
                 )
                 folder = info["folder"]
                 if self.show_preview and not preview_sent and info.get("first_image"):
@@ -591,6 +602,12 @@ class PageScraperImages(QWidget):
         self.input_alt_json.hide()
         label_alt_json.hide()
 
+        self.spin_threads = QSpinBox()
+        self.spin_threads.setRange(1, 32)
+        self.spin_threads.setValue(manager.settings.get("images_max_threads", 4))
+        layout.addWidget(QLabel("Threads parall\xc3\xa8les"))
+        layout.addWidget(self.spin_threads)
+
         self.checkbox_preview = QCheckBox("Afficher le dossier après téléchargement")
         self.switch_preview = ToggleSwitch()
         switch_label = QLabel("Aperçu")
@@ -644,6 +661,7 @@ class PageScraperImages(QWidget):
             self.input_alt_json,
         ]:
             widget.editingFinished.connect(self.save_fields)
+        self.spin_threads.valueChanged.connect(self.save_fields)
 
     def start_worker(self) -> None:
         url = self.input_source.text().strip()
@@ -683,6 +701,7 @@ class PageScraperImages(QWidget):
             open_folder,
             show_preview,
             alt_json,
+            self.spin_threads.value(),
         )
         self.worker.log.connect(self.log_view.appendPlainText)
         self.worker.progress.connect(self.update_progress)
@@ -773,6 +792,7 @@ class PageScraperImages(QWidget):
         self.manager.save_setting("images_dest", self.input_dest.text())
         self.manager.save_setting("images_selector", self.input_options.text())
         self.manager.save_setting("images_alt_json", self.input_alt_json.text())
+        self.manager.save_setting("images_max_threads", self.spin_threads.value())
 
     def display_preview(self, path: str) -> None:
         if not self.switch_preview.isChecked():
