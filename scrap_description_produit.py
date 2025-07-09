@@ -39,6 +39,7 @@ def extract_html_description(url: str, css_selector: str = DEFAULT_SELECTOR) -> 
 
 def save_html_to_file(html: str, filename: Path = Path("description.html")) -> None:
     """Save *html* into *filename* encoded as UTF-8."""
+    filename.parent.mkdir(parents=True, exist_ok=True)
     filename.write_text(html, encoding="utf-8")
     logging.info("\U0001F4BE Description enregistrée dans %s", filename.resolve())
 
