@@ -1137,6 +1137,18 @@ class PageLinkGenerator(QWidget):
         self.manager.save_setting("linkgen_folder", self.folder_path)
 
 
+class PageAlphaScraper(QWidget):
+    """Combine AlphaEngine and PageScraperImages."""
+
+    def __init__(self, manager: SettingsManager) -> None:
+        super().__init__()
+        layout = QVBoxLayout(self)
+        self.alpha = AlphaEngine()
+        self.scraper = PageScraperImages(manager)
+        layout.addWidget(self.alpha)
+        layout.addWidget(self.scraper)
+
+
 class PageSettings(QWidget):
     """UI page allowing the user to customise the application."""
 
@@ -1333,6 +1345,7 @@ class MainWindow(QMainWindow):
             "G\u00e9n\u00e9rateur de lien",
             "Moteur Variante",
             "Alpha",
+            "Alpha + Images",
             "Param\u00e8tres",
         ]
 
@@ -1343,6 +1356,7 @@ class MainWindow(QMainWindow):
             "description.svg",
             "linkgen.svg",
             "variant.svg",
+            "alpha.svg",
             "alpha.svg",
             "settings.svg",
         ]
@@ -1384,6 +1398,7 @@ class MainWindow(QMainWindow):
         self.page_linkgen = PageLinkGenerator(settings)
         self.page_variants = PageVariantScraper(settings)
         self.page_alpha = AlphaEngine()
+        self.page_alpha_scraper = PageAlphaScraper(settings)
         self.page_settings = PageSettings(settings, self.apply_settings)
         self.stack.addWidget(self.page_profiles)
         self.stack.addWidget(self.page_scrap)
@@ -1392,6 +1407,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page_linkgen)
         self.stack.addWidget(self.page_variants)
         self.stack.addWidget(self.page_alpha)
+        self.stack.addWidget(self.page_alpha_scraper)
         self.stack.addWidget(self.page_settings)
 
         self.page_images.input_source.editingFinished.connect(
