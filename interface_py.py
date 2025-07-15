@@ -38,13 +38,28 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QFrame,
 )
-from PySide6.QtCore import (
-    QThread,
-    Signal,
-    Qt,
-    QRect,
-    QTimer,
-)
+try:
+    from PySide6.QtCore import (
+        QThread,
+        Signal,
+        Qt,
+        QRect,
+        QTimer,
+        QPropertyAnimation,
+        QEasingCurve,
+    )
+except Exception:  # pragma: no cover - used in test stubs
+    from PySide6.QtCore import (
+        QThread,
+        Signal,
+        Qt,
+        QRect,
+        QTimer,
+        QPropertyAnimation,
+    )
+
+    class QEasingCurve:
+        InOutCubic = 0
 from PySide6.QtGui import QFont, QPainter, QColor, QPixmap, QClipboard
 
 # QSplitter might not be available in all test environments
@@ -1837,7 +1852,8 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self.sidebar.setFixedWidth(180)
+        self.sidebar.setMinimumWidth(0)
+        self.sidebar.setMaximumWidth(180)
         self.scroll_area = QScrollArea()
         self.scroll_area.setFrameShape(QFrame.NoFrame)
         self.scroll_area.setWidgetResizable(True)
@@ -1873,9 +1889,27 @@ class MainWindow(QMainWindow):
             self.label_title.setIcon(QIcon(str(self.icon_paths[index])))
 
     def toggle_sidebar(self) -> None:
-        """Show or hide the sidebar and update arrow direction."""
+        """Animate sidebar show/hide with a sliding effect."""
+        start_width = self.sidebar.width()
+        end_width = 0 if self.sidebar_visible else 180
+
+        if not self.sidebar_visible:
+            # ensure the sidebar is visible before expanding
+            self.sidebar.setVisible(True)
+
+        self._sidebar_anim = QPropertyAnimation(self.sidebar, b"maximumWidth", self)
+        self._sidebar_anim.setDuration(250)
+        self._sidebar_anim.setStartValue(start_width)
+        self._sidebar_anim.setEndValue(end_width)
+        self._sidebar_anim.setEasingCurve(QEasingCurve.InOutCubic)
+        self._sidebar_anim.finished.connect(self._finalize_toggle)
+        self._sidebar_anim.start()
+
+    def _finalize_toggle(self) -> None:
+        """Finalize sidebar toggle state after animation."""
         self.sidebar_visible = not self.sidebar_visible
-        self.sidebar.setVisible(self.sidebar_visible)
+        if not self.sidebar_visible:
+            self.sidebar.setVisible(False)
         arrow = Qt.LeftArrow if self.sidebar_visible else Qt.RightArrow
         self.toggle_sidebar_btn.setArrowType(arrow)
 
