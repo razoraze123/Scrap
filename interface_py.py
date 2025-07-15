@@ -104,6 +104,11 @@ except Exception:  # pragma: no cover - fallback for tests
 
 ICONS_DIR = Path(__file__).resolve().parent / "icons"
 
+# Sidebar sizing constants
+ICON_SIZE = 24
+SIDEBAR_EXPANDED_WIDTH = 180
+SIDEBAR_COLLAPSED_WIDTH = ICON_SIZE + 16
+
 
 def load_stylesheet(path: str = "style.qss") -> None:
     """Apply the application's stylesheet if available."""
@@ -1789,6 +1794,9 @@ class MainWindow(QMainWindow):
             self.side_buttons.append(section.header)
         side_layout.addStretch()
 
+        for btn in self.side_buttons:
+            btn.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
+
         # Top bar
         self.toolbar = QToolBar()
         self.toolbar.setMovable(False)
@@ -1853,7 +1861,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.sidebar.setMinimumWidth(0)
-        self.sidebar.setMaximumWidth(180)
+        self.sidebar.setMaximumWidth(SIDEBAR_EXPANDED_WIDTH)
         self.scroll_area = QScrollArea()
         self.scroll_area.setFrameShape(QFrame.NoFrame)
         self.scroll_area.setWidgetResizable(True)
@@ -1889,27 +1897,34 @@ class MainWindow(QMainWindow):
             self.label_title.setIcon(QIcon(str(self.icon_paths[index])))
 
     def toggle_sidebar(self) -> None:
-        """Animate sidebar show/hide with a sliding effect."""
-        start_width = self.sidebar.width()
-        end_width = 0 if self.sidebar_visible else 180
+        start = self.sidebar.width()
+        end = (
+            SIDEBAR_COLLAPSED_WIDTH if self.sidebar_visible else SIDEBAR_EXPANDED_WIDTH
+        )
 
         if not self.sidebar_visible:
-            # ensure the sidebar is visible before expanding
             self.sidebar.setVisible(True)
 
-        self._sidebar_anim = QPropertyAnimation(self.sidebar, b"maximumWidth", self)
-        self._sidebar_anim.setDuration(250)
-        self._sidebar_anim.setStartValue(start_width)
-        self._sidebar_anim.setEndValue(end_width)
-        self._sidebar_anim.setEasingCurve(QEasingCurve.InOutCubic)
-        self._sidebar_anim.finished.connect(self._finalize_toggle)
-        self._sidebar_anim.start()
+        self._anim = QPropertyAnimation(self.sidebar, b"maximumWidth", self)
+        self._anim.setDuration(200)
+        self._anim.setStartValue(start)
+        self._anim.setEndValue(end)
+        self._anim.setEasingCurve(QEasingCurve.InOutCubic)
+        self._anim.finished.connect(self._on_sidebar_toggled)
+        self._anim.start()
 
-    def _finalize_toggle(self) -> None:
-        """Finalize sidebar toggle state after animation."""
+    def _on_sidebar_toggled(self) -> None:
         self.sidebar_visible = not self.sidebar_visible
+
         if not self.sidebar_visible:
-            self.sidebar.setVisible(False)
+            for btn in self.side_buttons:
+                btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
+            self.sidebar.setMaximumWidth(SIDEBAR_COLLAPSED_WIDTH)
+        else:
+            for btn in self.side_buttons:
+                btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            self.sidebar.setMaximumWidth(SIDEBAR_EXPANDED_WIDTH)
+
         arrow = Qt.LeftArrow if self.sidebar_visible else Qt.RightArrow
         self.toggle_sidebar_btn.setArrowType(arrow)
 
