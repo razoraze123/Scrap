@@ -44,9 +44,6 @@ USE_ALT_JSON = True
 
 logger = logging.getLogger(__name__)
 
-# Reserved paths to avoid name collisions during concurrent downloads
-_RESERVED_PATHS: set[Path] = set()
-
 
 def _safe_folder(product_name: str, base_dir: Path | str = "images") -> Path:
     """Return a Path object for the folder where images will be saved."""
@@ -94,20 +91,22 @@ def _save_base64(encoded: str, path: Path) -> None:
     path.write_bytes(data)
 
 
-def _unique_path(folder: Path, filename: str) -> Path:
-    """Return a unique Path in *folder* for *filename*.
+def _unique_path(folder: Path, filename: str, reserved: set[Path]) -> Path:
+    """Return a unique ``Path`` in *folder* for *filename*.
 
     If a file with the same name already exists, ``_n`` is appended before the
-    extension where ``n`` increments until an unused name is found.
+    extension where ``n`` increments until an unused name is found. The
+    ``reserved`` set keeps track of paths generated during a single run to avoid
+    collisions when downloads occur concurrently.
     """
 
     base, ext = os.path.splitext(filename)
     candidate = folder / filename
     counter = 1
-    while candidate.exists() or candidate in _RESERVED_PATHS:
+    while candidate.exists() or candidate in reserved:
         candidate = folder / f"{base}_{counter}{ext}"
         counter += 1
-    _RESERVED_PATHS.add(candidate)
+    reserved.add(candidate)
     return candidate
 
 
@@ -150,7 +149,9 @@ def _clean_filename(text: str) -> str:
     return ascii_text
 
 
-def _rename_with_alt(path: Path, sentences: dict, warned: set[str]) -> Path:
+def _rename_with_alt(
+    path: Path, sentences: dict, warned: set[str], reserved: set[Path]
+) -> Path:
     """Rename *path* using ALT sentences if available."""
 
     product_key = path.parent.name.replace("_", " ")
@@ -167,7 +168,7 @@ def _rename_with_alt(path: Path, sentences: dict, warned: set[str]) -> Path:
     filename = _clean_filename(alt_phrase) + path.suffix
     target = path.parent / filename
     if target != path and target.exists():
-        target = _unique_path(path.parent, filename)
+        target = _unique_path(path.parent, filename, reserved)
     try:
         path.rename(target)
     except OSError as exc:
@@ -177,7 +178,7 @@ def _rename_with_alt(path: Path, sentences: dict, warned: set[str]) -> Path:
 
 
 def _handle_image(
-    element, folder: Path, index: int, user_agent: str
+    element, folder: Path, index: int, user_agent: str, reserved: set[Path]
 ) -> tuple[Path, str | None]:
     src = (
         element.get_attribute("src")
@@ -198,7 +199,7 @@ def _handle_image(
         header, encoded = src.split(",", 1)
         ext = header.split("/")[1].split(";")[0]
         filename = f"image_base64_{index}.{ext}"
-        target = _unique_path(folder, filename)
+        target = _unique_path(folder, filename, reserved)
         _save_base64(encoded, target)
         return target, None
 
@@ -207,7 +208,7 @@ def _handle_image(
 
     raw_filename = os.path.basename(src.split("?")[0])
     filename = re.sub(r"-\d+(?=\.\w+$)", "", raw_filename)
-    target = _unique_path(folder, filename)
+    target = _unique_path(folder, filename, reserved)
     return target, src
 
 
@@ -255,7 +256,7 @@ def download_images(
     max_threads: int = 4,
 ) -> dict:
     """Download all images from *url* and return folder and first image."""
-    _RESERVED_PATHS.clear()
+    reserved_paths: set[Path] = set()
     if user_agent is None:
         try:
             path = Path("settings.json")
@@ -308,7 +309,9 @@ def download_images(
         with ThreadPoolExecutor(max_workers=max_threads) as executor:
             for idx, img in enumerate(img_elements, start=1):
                 try:
-                    path, url_to_download = _handle_image(img, folder, idx, user_agent)
+                    path, url_to_download = _handle_image(
+                        img, folder, idx, user_agent, reserved_paths
+                    )
                     WebDriverWait(driver, 5).until(
                         lambda d: img.get_attribute("src")
                         or img.get_attribute("data-src")
@@ -316,7 +319,9 @@ def download_images(
                     )
                     if url_to_download is None:
                         if use_alt_json:
-                            path = _rename_with_alt(path, sentences, warned_missing)
+                            path = _rename_with_alt(
+                                path, sentences, warned_missing, reserved_paths
+                            )
                         downloaded += 1
                         if first_image is None:
                             first_image = path
@@ -333,7 +338,9 @@ def download_images(
                 try:
                     fut.result()
                     if use_alt_json:
-                        path = _rename_with_alt(path, sentences, warned_missing)
+                        path = _rename_with_alt(
+                            path, sentences, warned_missing, reserved_paths
+                        )
                     downloaded += 1
                     if first_image is None:
                         first_image = path
