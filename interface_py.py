@@ -935,11 +935,11 @@ def download_images(
     downloaded = 0
     skipped = 0
 
-    if use_alt_json:
-        path = Path(alt_json_path) if alt_json_path else ALT_JSON_PATH
-        sentences = _load_alt_sentences(path)
+    if use_alt_json and alt_json_path:
+        sentences = _load_alt_sentences(Path(alt_json_path))
     else:
         sentences = {}
+        use_alt_json = False
     warned_missing: set[str] = set()
 
     try:
@@ -1020,6 +1020,9 @@ def scraper_images_main() -> None:
     parser.add_argument("--jobs", type=int, default=1, help="Nombre maximal de pages a traiter en parallele (defaut: %(default)s)")
     parser.set_defaults(use_alt_json=USE_ALT_JSON)
     args = parser.parse_args()
+
+    if not args.alt_json_path:
+        args.alt_json_path = None
 
     if args.url and args.urls:
         parser.error("--url et --urls sont mutuellement exclusifs")
