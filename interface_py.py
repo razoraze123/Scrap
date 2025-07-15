@@ -157,6 +157,8 @@ class CollapsibleSection(QWidget):
         self.header.setText(self._title)
         self.header.setIcon(icon)
         self.header.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.header.setCheckable(True)
+        self.header.clicked.connect(callback)
         layout.addWidget(self.header)
 
         self.container = QWidget()
@@ -1781,7 +1783,7 @@ class MainWindow(QMainWindow):
                 lambda checked=False, i=i: self.show_page(i),
             )
             side_layout.addWidget(section)
-            self.side_buttons.append(section.page_button)
+            self.side_buttons.append(section.header)
         side_layout.addStretch()
 
         # Top bar
