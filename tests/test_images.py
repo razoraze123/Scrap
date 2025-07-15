@@ -154,6 +154,38 @@ def test_load_alt_sentences_cache(tmp_path, monkeypatch):
     assert calls == [1]
 
 
+def test_download_images_no_alt_when_empty_path(tmp_path, monkeypatch):
+    elem = ElementDataSrc()
+
+    driver = DummyDriver([elem])
+
+    monkeypatch.setattr(si, "WebDriverWait", DummyWait)
+    monkeypatch.setattr(si, "EC", DummyEC)
+    monkeypatch.setattr("driver_utils.setup_driver", lambda: driver)
+    monkeypatch.setattr(si, "setup_driver", lambda: driver)
+    monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
+    monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
+
+    load_calls = []
+    monkeypatch.setattr(si, "_load_alt_sentences", lambda p: load_calls.append(p) or {})
+    rename_calls = []
+    monkeypatch.setattr(si, "_rename_with_alt", lambda *a, **k: rename_calls.append(a) or a[0])
+
+    res = si.download_images(
+        "http://example.com",
+        css_selector="img",
+        parent_dir=tmp_path,
+        use_alt_json=True,
+        alt_json_path="",
+    )
+
+    assert load_calls == []
+    assert rename_calls == []
+    files = list(res["folder"].iterdir())
+    assert len(files) == 1
+    assert files[0].name == "ds.png"
+
+
 def test_download_images_same_names_on_repeat(tmp_path, monkeypatch):
     elem = ElementDataSrc()
 
