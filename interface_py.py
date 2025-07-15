@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 import logging
 import io
@@ -6,10 +8,21 @@ import shutil
 import subprocess
 import time
 import re
+import csv
+import json
+import base64
+import binascii
+import random
+import unicodedata
+import argparse
+import types
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable, Optional
+from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+
+import requests
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -78,11 +91,6 @@ except Exception:  # pragma: no cover - used only for stub environments
 
 from alpha_engine import AlphaEngine
 
-import scrap_lien_collection
-import scraper_images
-import scrap_description_produit
-import scrap_prix_produit
-import moteur_variante
 from settings_manager import SettingsManager, apply_settings
 from site_profile_manager import SiteProfileManager
 
@@ -110,6 +118,974 @@ SIDEBAR_EXPANDED_WIDTH = 180
 SIDEBAR_COLLAPSED_WIDTH = ICON_SIZE + 16
 
 
+# ----- driver_utils.py -----
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+def setup_driver(headless: bool | None = None, driver_path: str | None = None) -> webdriver.Chrome:
+    """Return a configured Chrome WebDriver."""
+    driver_path = driver_path or _load_driver_path_from_settings()
+    if headless is None:
+        headless = _load_headless_from_settings()
+
+    options = Options()
+    if headless:
+        options.add_argument("--headless")
+    options.add_argument("--disable-logging")
+    options.add_argument("--log-level=3")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+    options.add_argument("--disable-blink-features=AutomationControlled")
+
+    if driver_path and Path(driver_path).is_file():
+        service = Service(str(driver_path))
+    else:
+        service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+
+    driver.execute_cdp_cmd(
+        "Page.addScriptToEvaluateOnNewDocument",
+        {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"},
+    )
+    return driver
+
+
+def _load_headless_from_settings() -> bool:
+    settings_file = Path("settings.json")
+    if settings_file.is_file():
+        try:
+            data = json.loads(settings_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "headless" in data:
+                return bool(data["headless"])
+        except Exception:
+            pass
+    return True
+
+
+def _load_driver_path_from_settings() -> str | None:
+    settings_file = Path("settings.json")
+    if settings_file.is_file():
+        try:
+            data = json.loads(settings_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data.get("driver_path")
+        except Exception:
+            pass
+    return None
+
+
+# ----- find_css_selector.py -----
+
+try:
+    from bs4 import BeautifulSoup
+except Exception:  # pragma: no cover - optional dependency
+    BeautifulSoup = None  # type: ignore
+
+try:
+    from PySide6.QtWidgets import (
+        QApplication,
+        QMainWindow,
+        QWidget,
+        QVBoxLayout,
+        QLabel,
+        QPlainTextEdit,
+        QLineEdit,
+        QPushButton,
+    )
+except Exception:  # pragma: no cover - optional GUI
+    QApplication = None  # type: ignore
+
+_BLACKLIST_PATTERNS = [
+    re.compile(pattern)
+    for pattern in (
+        r"^v-stack$",
+        r"^h-stack$",
+        r"^gap-",
+        r"^grid$",
+        r"^grid-",
+        r"^w-full$",
+        r"^h-full$",
+    )
+]
+
+
+def _clean_classes(classes: Iterable[str] | None) -> list[str]:
+    if not classes:
+        return []
+    return [c for c in classes if not any(pat.search(c) for pat in _BLACKLIST_PATTERNS)]
+
+
+def _build_selector(a_tag) -> str:
+    parts: list[str] = ["a"]
+    for parent in a_tag.parents:
+        if parent.name == "[document]":
+            break
+        classes = _clean_classes(parent.get("class"))
+        if parent.get("id"):
+            parts.append(f"{parent.name}#{parent['id']}")
+            break
+        if classes:
+            parts.append(f"{parent.name}." + ".".join(classes))
+            break
+    return " ".join(reversed(parts))
+
+
+def find_best_css_selector(html: str) -> str:
+    if BeautifulSoup is None:
+        raise RuntimeError("BeautifulSoup is required for this function")
+    soup = BeautifulSoup(html, "html.parser")
+    anchors = [
+        a
+        for a in soup.find_all("a")
+        if a.get("href") and a.get_text(strip=True)
+    ]
+    if not anchors:
+        raise ValueError("No valid <a> tags found")
+
+    candidates = {_build_selector(a) for a in anchors}
+    return sorted(candidates, key=len)[0]
+
+
+def run_selector_gui() -> None:
+    if QApplication is None:
+        raise RuntimeError("PySide6 is not installed")
+
+    class MainWindow(QMainWindow):
+        def __init__(self) -> None:
+            super().__init__()
+            self.setWindowTitle("CSS Selector Tester")
+
+            container = QWidget()
+            layout = QVBoxLayout(container)
+            self.setCentralWidget(container)
+
+            layout.addWidget(QLabel("HTML input"))
+            self.input_html = QPlainTextEdit()
+            self.input_html.setPlaceholderText("Paste HTML snippet here...")
+            layout.addWidget(self.input_html)
+
+            self.button = QPushButton("Find selector")
+            layout.addWidget(self.button)
+
+            layout.addWidget(QLabel("Best selector"))
+            self.output = QLineEdit()
+            self.output.setReadOnly(True)
+            layout.addWidget(self.output)
+
+            self.status = QLabel()
+            layout.addWidget(self.status)
+
+            self.button.clicked.connect(self.on_click)
+
+        def on_click(self) -> None:
+            html = self.input_html.toPlainText().strip()
+            if not html:
+                self.status.setText("Please provide HTML")
+                self.output.clear()
+                return
+            try:
+                selector = find_best_css_selector(html)
+            except Exception as exc:  # noqa: BLE001
+                self.status.setText(str(exc))
+                self.output.clear()
+            else:
+                self.output.setText(selector)
+                self.status.setText("")
+
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.resize(600, 400)
+    window.show()
+    sys.exit(app.exec())
+
+
+def _gui_entry() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generate a CSS selector for product links from HTML input",
+    )
+    parser.add_argument("file", nargs="?", help="Path to an HTML file")
+    parser.add_argument("--gui", action="store_true", help="Launch the graphical interface")
+    args = parser.parse_args()
+
+    if args.gui:
+        run_selector_gui()
+    else:
+        if args.file:
+            with open(args.file, "r", encoding="utf-8") as fh:
+                content = fh.read()
+        else:
+            content = sys.stdin.read()
+        print(find_best_css_selector(content))
+
+
+# ----- generateur_lien.py -----
+
+class WooImageURLGenerator(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Générateur de Liens WooCommerce")
+
+        self.layout = QVBoxLayout()
+
+        self.label_base_url = QLabel("Domaine WooCommerce :")
+        self.input_base_url = QLineEdit("https://www.planetebob.fr")
+        self.layout.addWidget(self.label_base_url)
+        self.layout.addWidget(self.input_base_url)
+
+        self.label_date = QLabel("Date (format YYYY/MM) :")
+        self.input_date = QLineEdit("2025/07")
+        self.layout.addWidget(self.label_date)
+        self.layout.addWidget(self.input_date)
+
+        self.btn_select_folder = QPushButton("Choisir le dossier d'images")
+        self.btn_select_folder.clicked.connect(self.choose_folder)
+        self.layout.addWidget(self.btn_select_folder)
+
+        self.output_links = QTextEdit()
+        self.output_links.setPlaceholderText("Les URLs générées s'afficheront ici.")
+        self.layout.addWidget(self.output_links)
+
+        action_layout = QHBoxLayout()
+        self.btn_generate = QPushButton("Générer")
+        self.btn_generate.clicked.connect(self.generate_links)
+        action_layout.addWidget(self.btn_generate)
+
+        self.btn_copy = QPushButton("Copier les liens")
+        self.btn_copy.clicked.connect(self.copy_to_clipboard)
+        action_layout.addWidget(self.btn_copy)
+
+        self.btn_export = QPushButton("Exporter en .txt")
+        self.btn_export.clicked.connect(self.export_to_txt)
+        action_layout.addWidget(self.btn_export)
+
+        self.layout.addLayout(action_layout)
+
+        self.setLayout(self.layout)
+        self.folder_path = ""
+
+    def choose_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Sélectionner un dossier")
+        if folder:
+            self.folder_path = folder
+            self.btn_select_folder.setText(f"Dossier : {os.path.basename(folder)}")
+
+    def generate_links(self):
+        if not self.folder_path:
+            QMessageBox.warning(self, "Erreur", "Veuillez choisir un dossier.")
+            return
+
+        base_url = self.input_base_url.text().strip().rstrip("/")
+        date_path = self.input_date.text().strip()
+
+        links = []
+        for root, _, files in os.walk(self.folder_path):
+            for file in files:
+                if file.lower().endswith((".webp", ".jpg", ".jpeg", ".png")):
+                    file_url = f"{base_url}/wp-content/uploads/{date_path}/{file}"
+                    links.append(file_url)
+
+        if links:
+            self.output_links.setText("\n".join(links))
+        else:
+            self.output_links.setText("Aucune image valide trouvée dans le dossier.")
+
+    def copy_to_clipboard(self):
+        clipboard: QClipboard = QApplication.clipboard()
+        clipboard.setText(self.output_links.toPlainText())
+        QMessageBox.information(self, "Copié", "Les liens ont été copiés dans le presse-papiers.")
+
+    def export_to_txt(self):
+        if not self.output_links.toPlainText():
+            QMessageBox.warning(self, "Erreur", "Aucun lien à exporter.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(self, "Enregistrer sous", "liens_images.txt", "Fichier texte (*.txt)")
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.output_links.toPlainText())
+            QMessageBox.information(self, "Exporté", "Les liens ont été enregistrés avec succès.")
+
+
+# ----- moteur_variante.py -----
+
+MV_DEFAULT_SELECTOR = ".variant-picker__option-values span.sr-only"
+
+
+def extract_variants(url: str, selector: str = MV_DEFAULT_SELECTOR) -> tuple[str, list[str]]:
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
+
+    driver = setup_driver()
+    try:
+        logging.info("\U0001F310 Chargement de la page %s", url)
+        driver.get(url)
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+        )
+        title = driver.find_element(By.CSS_SELECTOR, "h1").text.strip()
+        elems = driver.find_elements(By.CSS_SELECTOR, selector)
+        variants = [e.text.strip() for e in elems if e.text.strip()]
+        logging.info("\u2714\ufe0f %d variante(s) détectée(s)", len(variants))
+        return title, variants
+    finally:
+        driver.quit()
+
+
+def extract_variants_with_images(url: str) -> tuple[str, dict[str, str]]:
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
+
+    driver = setup_driver()
+    try:
+        logging.info("\U0001F310 Chargement de la page %s", url)
+        driver.get(url)
+        wait = WebDriverWait(driver, 10)
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "h1")))
+        title = driver.find_element(By.CSS_SELECTOR, "h1").text.strip()
+
+        container = driver.find_element(By.CSS_SELECTOR, ".variant-picker__option-values")
+        inputs = container.find_elements(By.CSS_SELECTOR, "input[type='radio'].sr-only")
+
+        results: dict[str, str] = {}
+        for inp in inputs:
+            name = inp.get_attribute("value")
+            if not name or name in results:
+                continue
+
+            img_elem = driver.find_element(By.CSS_SELECTOR, ".product-gallery__media.is-selected img")
+            old_src = img_elem.get_attribute("src")
+
+            if inp.get_attribute("checked") is None:
+                driver.execute_script("arguments[0].click();", inp)
+                time.sleep(random.uniform(0.1, 0.2))
+                WebDriverWait(driver, 5).until(
+                    lambda d: d.find_element(By.CSS_SELECTOR, ".product-gallery__media.is-selected img").get_attribute("src") != old_src
+                )
+                img_elem = driver.find_element(By.CSS_SELECTOR, ".product-gallery__media.is-selected img")
+
+            src = img_elem.get_attribute("src")
+            if src.startswith("//"):
+                src = "https:" + src
+            results[name] = src
+            logging.info("%s -> %s", name, src)
+
+        return title, results
+    finally:
+        driver.quit()
+
+
+def save_to_file(title: str, variants: list[str], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        fh.write(f"{title}\t{', '.join(variants)}\n")
+    logging.info("\U0001F4BE Variantes enregistrées dans %s", path)
+
+
+def save_images_to_file(title: str, variants: dict[str, str], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        fh.write(f"{title}\n")
+        for name, img in variants.items():
+            fh.write(f"{name} : {img}\n")
+    logging.info("\U0001F4BE Variantes enregistrées dans %s", path)
+
+
+def scrape_variants(url: str, selector: str, output: Path) -> None:
+    title, variants = extract_variants(url, selector)
+    save_to_file(title, variants, output)
+
+
+def variant_main() -> None:
+    parser = argparse.ArgumentParser(description="Extrait le titre du produit et la liste des variantes.")
+    parser.add_argument("url", nargs="?", help="URL du produit (si absent, demande à l'exécution)")
+    parser.add_argument("-s", "--selector", default=MV_DEFAULT_SELECTOR, help="Sélecteur CSS des variantes")
+    parser.add_argument("-o", "--output", default="variants.txt", help="Fichier de sortie")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Niveau de logging")
+    args = parser.parse_args()
+    if not args.url:
+        args.url = input("URL du produit : ").strip()
+    logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
+    try:
+        scrape_variants(args.url, args.selector, Path(args.output))
+    except Exception as exc:
+        logging.error("%s", exc)
+
+moteur_variante = types.SimpleNamespace(
+    extract_variants=extract_variants,
+    extract_variants_with_images=extract_variants_with_images,
+    save_to_file=save_to_file,
+    save_images_to_file=save_images_to_file,
+    scrape_variants=scrape_variants,
+    variant_main=variant_main,
+    DEFAULT_SELECTOR=MV_DEFAULT_SELECTOR,
+)
+
+
+# ----- scrap_lien_collection.py -----
+
+SLC_DEFAULT_SELECTOR = "div.product-card__info h3.product-card__title a"
+SLC_DEFAULT_NEXT_SELECTOR = "a[rel=\"next\"]"
+
+
+def _random_sleep(min_s: float = 1.0, max_s: float = 2.5) -> None:
+    time.sleep(random.uniform(min_s, max_s))
+
+
+def scrape_collection(
+    url: str,
+    output_path: Path,
+    css_selector: str = SLC_DEFAULT_SELECTOR,
+    next_selector: str = SLC_DEFAULT_NEXT_SELECTOR,
+    output_format: str = "txt",
+) -> None:
+    driver = setup_driver()
+    results: list[dict[str, str]] = []
+    try:
+        page_num = 1
+        logging.info("Ouverture de la collection : %s", url)
+        if not url.lower().startswith(("http://", "https://")):
+            raise ValueError("URL invalide : seul http(s) est autorise")
+        driver.get(url)
+        _random_sleep(2.0, 4.0)
+        while True:
+            logging.info("Traitement de la page %d", page_num)
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, css_selector))
+            )
+            elems = driver.find_elements(By.CSS_SELECTOR, css_selector)
+            for el in elems:
+                name = el.get_attribute("innerText").strip()
+                href = el.get_attribute("href") or el.get_attribute("data-href") or ""
+                full_url = href if href.startswith("http") else urljoin(url, href)
+                results.append({"name": name, "url": full_url})
+                logging.debug("\u2192 %s : %s", name, full_url)
+            try:
+                next_btn = driver.find_element(By.CSS_SELECTOR, next_selector)
+                next_href = next_btn.get_attribute("href")
+                if not next_href:
+                    break
+                logging.info("\u2192 Page suivante detectee, navigation vers %s", next_href)
+                current_url = driver.current_url
+                next_btn.click()
+                WebDriverWait(driver, 10).until(
+                    lambda d: d.current_url != current_url or EC.staleness_of(next_btn)(d)
+                )
+                page_num += 1
+            except Exception:
+                logging.info("\u2192 Pas de page suivante, fin de la pagination.")
+                break
+    finally:
+        driver.quit()
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_format == "json":
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+    elif output_format == "csv":
+        with output_path.open("w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["name", "url"])
+            writer.writeheader()
+            writer.writerows(results)
+    else:
+        with output_path.open("w", encoding="utf-8-sig") as f:
+            for row in results:
+                f.write(f"{row['name']} - {row['url']}\n")
+    logging.info("\u2714\ufe0f %d produits sauvegardes dans %s", len(results), output_path)
+
+
+def scrape_collection_main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Scraper les noms et liens de produits depuis une collection Shopify (ou autre)."
+    )
+    parser.add_argument("url", nargs="?", help="URL de la page de collection (si absent, demande a l'execution)")
+    parser.add_argument("-o", "--output", default="products.txt", help="Chemin du fichier de sortie (defaut: %(default)s)")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Niveau de logging (defaut: %(default)s)")
+    parser.add_argument("-s", "--selector", default=SLC_DEFAULT_SELECTOR, help="Selecteur CSS des liens produits (defaut: %(default)s)")
+    parser.add_argument("--next-selector", default=SLC_DEFAULT_NEXT_SELECTOR, help="Selecteur CSS du bouton 'page suivante' (defaut: %(default)s)")
+    parser.add_argument("--format", choices=["txt", "json", "csv"], default="txt", help="Format de sortie : txt, json ou csv (defaut: %(default)s)")
+    args = parser.parse_args()
+    if not args.url:
+        args.url = input("Entrez l'URL de la collection a scraper : ").strip()
+    logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s %(levelname)s %(message)s")
+    css_selector = args.selector
+    print(f"\U0001F7E1 Selecteur CSS utilise : {css_selector}")
+    print(f"\U0001F7E1 Selecteur CSS pour le bouton 'page suivante' : {args.next_selector}")
+    try:
+        scrape_collection(args.url, Path(args.output), css_selector, args.next_selector, args.format)
+    except Exception as exc:
+        logging.error("Une erreur est survenue : %s", exc)
+        sys.exit(1)
+
+
+scrap_lien_collection = types.SimpleNamespace(
+    scrape_collection=scrape_collection,
+    scrape_collection_main=scrape_collection_main,
+    DEFAULT_SELECTOR=SLC_DEFAULT_SELECTOR,
+    DEFAULT_NEXT_SELECTOR=SLC_DEFAULT_NEXT_SELECTOR,
+)
+
+
+# ----- scrap_description_produit.py -----
+
+SDP_DEFAULT_SELECTOR = ".rte"
+
+
+def extract_html_description(url: str, css_selector: str = SDP_DEFAULT_SELECTOR) -> str:
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
+
+    driver = setup_driver()
+    try:
+        driver.get(url)
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, css_selector)))
+        element = driver.find_element(By.CSS_SELECTOR, css_selector)
+        html = element.get_attribute("innerHTML")
+        logging.info("\u2714\ufe0f HTML extrait avec succès")
+        return html.strip()
+    finally:
+        driver.quit()
+
+
+def save_html_to_file(html: str, filename: Path = Path("description.html")) -> None:
+    filename.parent.mkdir(parents=True, exist_ok=True)
+    filename.write_text(html, encoding="utf-8")
+    logging.info("\U0001F4BE Description enregistrée dans %s", filename.resolve())
+
+
+def scrape_description(url: str, selector: str, output: Path) -> None:
+    html = extract_html_description(url, selector)
+    save_html_to_file(html, output)
+
+
+def description_main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Extraire la description HTML d'un produit et la sauvegarder dans un fichier."
+    )
+    parser.add_argument("url", nargs="?", help="URL du produit (si absent, demande à l'exécution)")
+    parser.add_argument("-s", "--selector", default=SDP_DEFAULT_SELECTOR, help="Sélecteur CSS de la description (defaut: %(default)s)")
+    parser.add_argument("-o", "--output", default="description.html", help="Fichier de sortie (defaut: %(default)s)")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Niveau de logging (defaut: %(default)s)")
+    args = parser.parse_args()
+    if not args.url:
+        args.url = input("\U0001F517 Entrez l'URL du produit : ").strip()
+    logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
+    try:
+        scrape_description(args.url, args.selector, Path(args.output))
+    except Exception as exc:
+        logging.error("%s", exc)
+
+scrap_description_produit = types.SimpleNamespace(
+    extract_html_description=extract_html_description,
+    save_html_to_file=save_html_to_file,
+    scrape_description=scrape_description,
+    description_main=description_main,
+    DEFAULT_SELECTOR=SDP_DEFAULT_SELECTOR,
+)
+
+# ----- scrap_prix_produit.py -----
+
+SPP_DEFAULT_SELECTOR = ".price"
+
+
+def extract_price(url: str, css_selector: str = SPP_DEFAULT_SELECTOR) -> str:
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
+
+    driver = setup_driver()
+    try:
+        driver.get(url)
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, css_selector)))
+        element = driver.find_element(By.CSS_SELECTOR, css_selector)
+        price = element.get_attribute("innerText")
+        logging.info("\u2714\ufe0f Prix extrait avec succès")
+        return price.strip()
+    finally:
+        driver.quit()
+
+
+def save_price_to_file(price: str, filename: Path = Path("price.txt")) -> None:
+    filename.parent.mkdir(parents=True, exist_ok=True)
+    filename.write_text(price, encoding="utf-8")
+    logging.info("\U0001F4BE Prix enregistré dans %s", filename.resolve())
+
+
+def scrape_price(url: str, selector: str, output: Path) -> None:
+    price = extract_price(url, selector)
+    save_price_to_file(price, output)
+
+
+def price_main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Extraire le prix d'un produit et le sauvegarder dans un fichier."
+    )
+    parser.add_argument("url", nargs="?", help="URL du produit (si absent, demande à l'exécution)")
+    parser.add_argument("-s", "--selector", default=SPP_DEFAULT_SELECTOR, help="Sélecteur CSS du prix (defaut: %(default)s)")
+    parser.add_argument("-o", "--output", default="price.txt", help="Fichier de sortie (defaut: %(default)s)")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Niveau de logging (defaut: %(default)s)")
+    args = parser.parse_args()
+    if not args.url:
+        args.url = input("\U0001F517 Entrez l'URL du produit : ").strip()
+    logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
+    try:
+        scrape_price(args.url, args.selector, Path(args.output))
+    except Exception as exc:  # noqa: BLE001
+        logging.error("%s", exc)
+
+scrap_prix_produit = types.SimpleNamespace(
+    extract_price=extract_price,
+    save_price_to_file=save_price_to_file,
+    scrape_price=scrape_price,
+    price_main=price_main,
+    DEFAULT_SELECTOR=SPP_DEFAULT_SELECTOR,
+)
+
+# ----- scraper_images.py -----
+
+DEFAULT_CSS_SELECTOR = ".product-gallery__media-list img"
+ALT_JSON_PATH = Path(__file__).with_name("product_sentences.json")
+USE_ALT_JSON = True
+
+logger = logging.getLogger(__name__)
+
+_RESERVED_PATHS: set[Path] = set()
+
+
+def _safe_folder(product_name: str, base_dir: Path | str = "images") -> Path:
+    safe_name = re.sub(r"[^\w\-]", "_", product_name)
+    folder = Path(base_dir) / safe_name
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _open_folder(path: Path) -> None:
+    try:
+        if os.name == "nt":
+            os.startfile(path)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception as exc:
+        logger.warning("Impossible d'ouvrir le dossier %s : %s", path, exc)
+
+
+USER_AGENT = "ScrapImageBot/1.0"
+
+
+def _download_binary(url: str, path: Path, user_agent: str = USER_AGENT) -> None:
+    headers = {"User-Agent": user_agent}
+    try:
+        with requests.get(url, headers=headers, stream=True, timeout=10) as resp:
+            resp.raise_for_status()
+            with path.open("wb") as fh:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        fh.write(chunk)
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"Failed to download {url}") from exc
+
+
+def _save_base64(encoded: str, path: Path) -> None:
+    try:
+        data = base64.b64decode(encoded)
+    except binascii.Error as exc:
+        raise RuntimeError("Invalid base64 image data") from exc
+    path.write_bytes(data)
+
+
+def _unique_path(folder: Path, filename: str) -> Path:
+    base, ext = os.path.splitext(filename)
+    candidate = folder / filename
+    counter = 1
+    while candidate.exists() or candidate in _RESERVED_PATHS:
+        candidate = folder / f"{base}_{counter}{ext}"
+        counter += 1
+    _RESERVED_PATHS.add(candidate)
+    return candidate
+
+
+_ALT_SENTENCES_CACHE: dict[Path, dict] = {}
+
+
+def _load_alt_sentences(path: Path = ALT_JSON_PATH) -> dict:
+    global _ALT_SENTENCES_CACHE
+    path = Path(path)
+    cached = _ALT_SENTENCES_CACHE.get(path)
+    if cached is not None:
+        return cached
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception as exc:
+        logger.warning("Impossible de charger %s : %s", path, exc)
+        data = {}
+    _ALT_SENTENCES_CACHE[path] = data
+    return data
+
+
+def _clean_filename(text: str) -> str:
+    normalized = unicodedata.normalize("NFD", text)
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    ascii_text = ascii_text.lower()
+    ascii_text = re.sub(r"\s+", "_", ascii_text)
+    ascii_text = re.sub(r"[^a-z0-9_-]", "", ascii_text)
+    return ascii_text
+
+
+def _rename_with_alt(path: Path, sentences: dict, warned: set[str]) -> Path:
+    product_key = path.parent.name.replace("_", " ")
+    phrase_list = sentences.get(product_key)
+    if not phrase_list:
+        if product_key not in warned:
+            logger.warning("Aucune phrase ALT pour %s", product_key)
+            warned.add(product_key)
+        return path
+    alt_phrase = random.choice(phrase_list)
+    filename = _clean_filename(alt_phrase) + path.suffix
+    target = path.parent / filename
+    if target != path and target.exists():
+        target = _unique_path(path.parent, filename)
+    try:
+        path.rename(target)
+    except OSError as exc:
+        logger.warning("Echec du renommage %s -> %s : %s", path, target, exc)
+        return path
+    return target
+
+
+def _handle_image(element, folder: Path, index: int, user_agent: str) -> tuple[Path, str | None]:
+    src = element.get_attribute("src") or element.get_attribute("data-src") or element.get_attribute("data-srcset")
+    if not src:
+        raise RuntimeError("Aucun attribut src / data-src trouvé pour l'image")
+    if " " in src and "," in src:
+        candidates = [s.strip().split(" ")[0] for s in src.split(",")]
+        src = candidates[-1]
+    logger.debug(f"Téléchargement de l'image : {src}")
+    if src.startswith("data:image"):
+        header, encoded = src.split(",", 1)
+        ext = header.split("/")[1].split(";")[0]
+        filename = f"image_base64_{index}.{ext}"
+        target = _unique_path(folder, filename)
+        _save_base64(encoded, target)
+        return target, None
+    if src.startswith("//"):
+        src = "https:" + src
+    raw_filename = os.path.basename(src.split("?")[0])
+    filename = re.sub(r"-\d+(?=\.\w+$)", "", raw_filename)
+    target = _unique_path(folder, filename)
+    return target, src
+
+
+def _find_product_name(driver: webdriver.Chrome) -> str:
+    selectors = [
+        (By.CSS_SELECTOR, "meta[property='og:title']", "content"),
+        (By.TAG_NAME, "title", None),
+        (By.TAG_NAME, "h1", None),
+    ]
+    for by, value, attr in selectors:
+        try:
+            elem = driver.find_element(by, value)
+            text = elem.get_attribute(attr) if attr else getattr(elem, "text", "")
+            if text:
+                text = text.strip()
+            if text:
+                return text
+        except Exception:
+            continue
+    return "produit_woo"
+
+
+def download_images(
+    url: str,
+    css_selector: str = DEFAULT_CSS_SELECTOR,
+    parent_dir: Path | str = "images",
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+    user_agent: str | None = None,
+    use_alt_json: bool = USE_ALT_JSON,
+    *,
+    alt_json_path: str | Path | None = None,
+    max_threads: int = 4,
+) -> dict:
+    _RESERVED_PATHS.clear()
+    if user_agent is None:
+        try:
+            path = Path("settings.json")
+            if path.is_file():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                user_agent = data.get("user_agent", USER_AGENT)
+            else:
+                user_agent = USER_AGENT
+        except Exception:
+            user_agent = USER_AGENT
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("URL must start with http:// or https://")
+
+    driver = setup_driver()
+
+    product_name = ""
+    folder = Path()
+    first_image: Path | None = None
+    downloaded = 0
+    skipped = 0
+
+    if use_alt_json:
+        path = Path(alt_json_path) if alt_json_path else ALT_JSON_PATH
+        sentences = _load_alt_sentences(path)
+    else:
+        sentences = {}
+    warned_missing: set[str] = set()
+
+    try:
+        logger.info("\U0001F30D Chargement de la page...")
+        driver.get(url)
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, css_selector)))
+        product_name = _find_product_name(driver)
+        folder = _safe_folder(product_name, parent_dir)
+        img_elements = driver.find_elements(By.CSS_SELECTOR, css_selector)
+        logger.info(f"\n\U0001F5BC {len(img_elements)} images trouvées avec le sélecteur : {css_selector}\n")
+        total = len(img_elements)
+        pbar = tqdm(range(total), desc="\U0001F53D Téléchargement des images")
+        pbar_update = getattr(pbar, "update", lambda n=1: None)
+        pbar_close = getattr(pbar, "close", lambda: None)
+        futures: dict = {}
+        with ThreadPoolExecutor(max_workers=max_threads) as executor:
+            for idx, img in enumerate(img_elements, start=1):
+                try:
+                    path, url_to_download = _handle_image(img, folder, idx, user_agent)
+                    WebDriverWait(driver, 5).until(
+                        lambda d: img.get_attribute("src") or img.get_attribute("data-src") or img.get_attribute("data-srcset")
+                    )
+                    if url_to_download is None:
+                        if use_alt_json:
+                            path = _rename_with_alt(path, sentences, warned_missing)
+                        downloaded += 1
+                        if first_image is None:
+                            first_image = path
+                        pbar_update(1)
+                        if progress_callback:
+                            progress_callback(idx, total)
+                    else:
+                        fut = executor.submit(_download_binary, url_to_download, path, user_agent)
+                        futures[fut] = (idx, path)
+                except Exception as exc:
+                    logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
+            for fut in as_completed(futures):
+                idx, path = futures[fut]
+                try:
+                    fut.result()
+                    if use_alt_json:
+                        path = _rename_with_alt(path, sentences, warned_missing)
+                    downloaded += 1
+                    if first_image is None:
+                        first_image = path
+                except Exception as exc:
+                    logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
+                    skipped += 1
+                pbar_update(1)
+                if progress_callback:
+                    progress_callback(idx, total)
+        pbar_close()
+    finally:
+        driver.quit()
+
+    logger.info("\n" + "-" * 50)
+    logger.info("\U0001F3AF Produit     : %s", product_name)
+    logger.info("\U0001F4E6 Dossier     : %s", folder)
+    logger.info("\u2705 Téléchargées : %s", downloaded)
+    logger.info("\u27A1️ Ignorées     : %s", skipped)
+    logger.info("-" * 50)
+
+    return {"folder": folder, "first_image": first_image}
+
+
+def scraper_images_main() -> None:
+    parser = argparse.ArgumentParser(description="Télécharger toutes les images d'un produit WooCommerce.")
+    parser.add_argument("url", nargs="?", help="URL du produit (si absent, demande à l'exécution)")
+    parser.add_argument("-s", "--selector", default=DEFAULT_CSS_SELECTOR, help="Sélecteur CSS des images (defaut: %(default)s)")
+    parser.add_argument("-d", "--dest", "--parent-dir", dest="parent_dir", default="images", help="Dossier parent des images (defaut: %(default)s)")
+    parser.add_argument("--urls", help="Fichier contenant une liste d'URLs (une par ligne)")
+    parser.add_argument("--preview", action="store_true", help="Ouvrir le dossier des images après téléchargement")
+    parser.add_argument("--user-agent", default=USER_AGENT, help="User-Agent à utiliser pour les requêtes (defaut: %(default)s)")
+    parser.add_argument("--use-alt-json", dest="use_alt_json", action="store_true" if not USE_ALT_JSON else "store_false", help=("Activer" if not USE_ALT_JSON else "Désactiver") + " le renommage via product_sentences.json")
+    parser.add_argument("--alt-json-path", default=str(ALT_JSON_PATH), help="Chemin du fichier JSON pour le renommage (defaut: %(default)s)")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Niveau de logging (defaut: %(default)s)")
+    parser.add_argument("--max-threads", type=int, default=4, help="Nombre maximal de threads pour les telechargements (defaut: %(default)s)")
+    parser.add_argument("--jobs", type=int, default=1, help="Nombre maximal de pages a traiter en parallele (defaut: %(default)s)")
+    parser.set_defaults(use_alt_json=USE_ALT_JSON)
+    args = parser.parse_args()
+
+    if args.url and args.urls:
+        parser.error("--url et --urls sont mutuellement exclusifs")
+
+    urls_list = []
+    if args.urls:
+        try:
+            with open(args.urls, "r", encoding="utf-8") as fh:
+                urls_list = [line.strip() for line in fh if line.strip()]
+        except OSError as exc:
+            parser.error(f"Impossible de lire le fichier {args.urls}: {exc}")
+
+    if not urls_list:
+        if not args.url:
+            args.url = input("\U0001F517 Entrez l'URL du produit WooCommerce : ").strip()
+        urls_list = [args.url]
+
+    logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
+
+    if args.jobs > 1 and len(urls_list) > 1:
+        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+            futures = {
+                executor.submit(
+                    scraper_images.download_images,
+                    url,
+                    css_selector=args.selector,
+                    parent_dir=args.parent_dir,
+                    user_agent=args.user_agent,
+                    use_alt_json=args.use_alt_json,
+                    alt_json_path=args.alt_json_path,
+                    max_threads=args.max_threads,
+                ): url
+                for url in urls_list
+            }
+            for fut in as_completed(futures):
+                try:
+                    info = fut.result()
+                    if args.preview:
+                        scraper_images._open_folder(info["folder"])
+                except ValueError as exc:
+                    logger.error("Erreur : %s", exc)
+    else:
+        for url in urls_list:
+            try:
+                info = scraper_images.download_images(
+                    url,
+                    css_selector=args.selector,
+                    parent_dir=args.parent_dir,
+                    user_agent=args.user_agent,
+                    use_alt_json=args.use_alt_json,
+                    alt_json_path=args.alt_json_path,
+                    max_threads=args.max_threads,
+                )
+                if args.preview:
+                    scraper_images._open_folder(info["folder"])
+            except ValueError as exc:
+                logger.error("Erreur : %s", exc)
+
+scraper_images = types.SimpleNamespace(
+    download_images=download_images,
+    scraper_images_main=scraper_images_main,
+    DEFAULT_CSS_SELECTOR=DEFAULT_CSS_SELECTOR,
+    ALT_JSON_PATH=ALT_JSON_PATH,
+    USE_ALT_JSON=USE_ALT_JSON,
+    _open_folder=_open_folder,
+)
 def load_stylesheet(path: str = "style.qss") -> None:
     """Apply the application's stylesheet if available."""
     app = QApplication.instance()
@@ -213,11 +1189,11 @@ class ScrapLienWorker(QThread):
         stream_handler.setFormatter(formatter)
         logger.addHandler(stream_handler)
         try:
-            scrap_lien_collection.scrape_collection(
+            scrape_collection(
                 self.url,
                 self.output,
                 self.selector,
-                scrap_lien_collection.DEFAULT_NEXT_SELECTOR,
+                SLC_DEFAULT_NEXT_SELECTOR,
                 self.output_format,
             )
         except Exception as exc:  # noqa: BLE001
@@ -343,7 +1319,7 @@ class ScrapDescriptionWorker(QThread):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         try:
-            scrap_description_produit.scrape_description(
+            scrape_description(
                 self.url, self.selector, self.output
             )
         except Exception as exc:  # noqa: BLE001
@@ -373,7 +1349,7 @@ class ScrapPriceWorker(QThread):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         try:
-            scrap_prix_produit.scrape_price(self.url, self.selector, self.output)
+            scrape_price(self.url, self.selector, self.output)
         except Exception as exc:  # noqa: BLE001
             logger.error("%s", exc)
         finally:
@@ -641,7 +1617,7 @@ class PageScrapLienCollection(QWidget):
 
         self.input_selector = QLineEdit(
             manager.settings.get(
-                "scrap_lien_selector", scrap_lien_collection.DEFAULT_SELECTOR
+                "scrap_lien_selector", SLC_DEFAULT_SELECTOR
             )
         )
         # Champ géré via l'onglet Profils – non ajouté au layout
@@ -679,7 +1655,7 @@ class PageScrapLienCollection(QWidget):
     def start_worker(self) -> None:
         url = self.input_url.text().strip()
         output = Path(self.input_output.text().strip() or "products.txt")
-        selector = self.input_selector.text().strip() or scrap_lien_collection.DEFAULT_SELECTOR
+        selector = self.input_selector.text().strip() or SLC_DEFAULT_SELECTOR
         log_level = self.combo_log.currentText()
         output_format = self.combo_format.currentText()
 
@@ -825,7 +1801,7 @@ class PageScraperImages(QWidget):
         url = self.input_source.text().strip()
         file_path = self.input_urls_file.text().strip()
         dest = Path(self.input_dest.text().strip() or "images")
-        selector = self.input_options.text().strip() or scraper_images.DEFAULT_CSS_SELECTOR
+        selector = self.input_options.text().strip() or DEFAULT_CSS_SELECTOR
 
         urls_list: list[str] = []
         if file_path:
@@ -975,7 +1951,7 @@ class PageScrapDescription(QWidget):
         layout.addWidget(self.input_url)
 
         self.input_selector = QLineEdit(
-            manager.settings.get("desc_selector", scrap_description_produit.DEFAULT_SELECTOR)
+            manager.settings.get("desc_selector", SDP_DEFAULT_SELECTOR)
         )
         # Champ géré via l'onglet Profils – non ajouté au layout
         label_selector = QLabel("Sélecteur CSS")
@@ -1006,7 +1982,7 @@ class PageScrapDescription(QWidget):
 
     def start_worker(self) -> None:
         url = self.input_url.text().strip()
-        selector = self.input_selector.text().strip() or scrap_description_produit.DEFAULT_SELECTOR
+        selector = self.input_selector.text().strip() or SDP_DEFAULT_SELECTOR
         output = Path(self.input_output.text().strip() or "description.html")
 
         if not url:
@@ -1056,7 +2032,7 @@ class PageScrapPrice(QWidget):
         layout.addWidget(self.input_url)
 
         self.input_selector = QLineEdit(
-            manager.settings.get("price_selector", scrap_prix_produit.DEFAULT_SELECTOR)
+            manager.settings.get("price_selector", SPP_DEFAULT_SELECTOR)
         )
         label_selector = QLabel("Sélecteur CSS")
         self.input_selector.hide()
@@ -1086,7 +2062,7 @@ class PageScrapPrice(QWidget):
 
     def start_worker(self) -> None:
         url = self.input_url.text().strip()
-        selector = self.input_selector.text().strip() or scrap_prix_produit.DEFAULT_SELECTOR
+        selector = self.input_selector.text().strip() or SPP_DEFAULT_SELECTOR
         output = Path(self.input_output.text().strip() or "price.txt")
 
         if not url:
@@ -1136,7 +2112,7 @@ class PageVariantScraper(QWidget):
         layout.addWidget(self.input_url)
 
         self.input_selector = QLineEdit(
-            manager.settings.get("variant_selector", moteur_variante.DEFAULT_SELECTOR)
+            manager.settings.get("variant_selector", MV_DEFAULT_SELECTOR)
         )
         label_selector = QLabel("Sélecteur CSS")
         self.input_selector.hide()
@@ -1181,7 +2157,7 @@ class PageVariantScraper(QWidget):
 
     def start_worker(self) -> None:
         url = self.input_url.text().strip()
-        selector = self.input_selector.text().strip() or moteur_variante.DEFAULT_SELECTOR
+        selector = self.input_selector.text().strip() or MV_DEFAULT_SELECTOR
         output = Path(self.input_output.text().strip() or "variants.txt")
         if not url:
             self.log_view.appendPlainText("Veuillez renseigner l'URL.")
@@ -1413,7 +2389,7 @@ class Alpha2Widget(QWidget):
         dest = Path(self.input_dir.text().strip() or "images")
         selector = self.manager.settings.get(
             "images_selector",
-            scraper_images.DEFAULT_CSS_SELECTOR,
+            DEFAULT_CSS_SELECTOR,
         )
 
         self.button_start.setEnabled(False)
@@ -1613,7 +2589,7 @@ class PageSettings(QWidget):
         layout.addWidget(self.input_driver_path)
 
         self.input_user_agent = QLineEdit(
-            manager.settings.get("user_agent", scraper_images.USER_AGENT)
+            manager.settings.get("user_agent", USER_AGENT)
         )
         layout.addWidget(QLabel("User-Agent"))
         layout.addWidget(self.input_user_agent)
@@ -1669,7 +2645,7 @@ class PageSettings(QWidget):
         s["enable_update"] = self.checkbox_update.isChecked()
         s["headless"] = self.checkbox_headless.isChecked()
         s["driver_path"] = self.input_driver_path.text().strip()
-        s["user_agent"] = self.input_user_agent.text().strip() or scraper_images.USER_AGENT
+        s["user_agent"] = self.input_user_agent.text().strip() or USER_AGENT
         self.manager.save_setting("headless", s["headless"])
         self.manager.save_setting("user_agent", s["user_agent"])
         self.manager.save()
@@ -1690,7 +2666,7 @@ class PageSettings(QWidget):
         self.checkbox_headless.setChecked(self.manager.settings.get("headless", True))
         self.input_driver_path.setText(self.manager.settings.get("driver_path", ""))
         self.input_user_agent.setText(
-            self.manager.settings.get("user_agent", scraper_images.USER_AGENT)
+            self.manager.settings.get("user_agent", USER_AGENT)
         )
         self.manager.save()
         self.apply_cb()
