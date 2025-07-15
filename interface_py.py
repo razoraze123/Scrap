@@ -161,18 +161,6 @@ class CollapsibleSection(QWidget):
         self.header.clicked.connect(callback)
         layout.addWidget(self.header)
 
-        self.container = QWidget()
-        container_layout = QVBoxLayout(self.container)
-        container_layout.setContentsMargins(20, 0, 0, 0)
-        self.page_button = QToolButton(text=title)
-        self.page_button.setIcon(icon)
-        self.page_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.page_button.setCheckable(True)
-        self.page_button.clicked.connect(callback)
-        container_layout.addWidget(self.page_button)
-        layout.addWidget(self.container)
-        self.container.setVisible(True)
-
 
 class ScrapLienWorker(QThread):
     log = Signal(str)
