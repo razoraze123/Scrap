@@ -42,8 +42,6 @@ from PySide6.QtCore import (
     QThread,
     Signal,
     Qt,
-    QPropertyAnimation,
-    Property,
     QRect,
     QTimer,
 )
@@ -120,34 +118,19 @@ class ToggleSwitch(QCheckBox):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._offset = 2
-        self._anim = QPropertyAnimation(self, b"offset", self)
-        self._anim.setDuration(120)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(40, 20)
         QCheckBox.setChecked(self, False)
         self.setStyleSheet("QCheckBox::indicator { width:0; height:0; }")
-
-    def offset(self) -> int:  # type: ignore[override]
-        return self._offset
-
-    def setOffset(self, value: int) -> None:  # type: ignore[override]
-        self._offset = value
-        self.update()
-
-    offset = Property(int, offset, setOffset)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: D401
         super().mouseReleaseEvent(event)
         self.setChecked(not self.isChecked())
 
     def setChecked(self, checked: bool) -> None:  # type: ignore[override]
-        start = self._offset
-        end = self.width() - self.height() + 2 if checked else 2
-        self._anim.stop()
-        self._anim.setStartValue(start)
-        self._anim.setEndValue(end)
-        self._anim.start()
+        self._offset = self.width() - self.height() + 2 if checked else 2
         super().setChecked(checked)
+        self.update()
 
     def paintEvent(self, event) -> None:  # noqa: D401
         radius = self.height() / 2
@@ -171,10 +154,9 @@ class CollapsibleSection(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.header = QToolButton()
-        self.header.setText(f"\u25B6 {title}")
+        self.header.setText(self._title)
         self.header.setIcon(icon)
         self.header.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.header.clicked.connect(self.toggle)
         layout.addWidget(self.header)
 
         self.container = QWidget()
@@ -187,13 +169,8 @@ class CollapsibleSection(QWidget):
         self.page_button.clicked.connect(callback)
         container_layout.addWidget(self.page_button)
         layout.addWidget(self.container)
-        self.container.setVisible(False)
+        self.container.setVisible(True)
 
-    def toggle(self) -> None:
-        visible = not self.container.isVisible()
-        self.container.setVisible(visible)
-        arrow = "\u25BC" if visible else "\u25B6"
-        self.header.setText(f"{arrow} {self._title}")
 
 class ScrapLienWorker(QThread):
     log = Signal(str)
