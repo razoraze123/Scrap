@@ -1,7 +1,6 @@
 import types
 import sys
-from pathlib import Path
-import importlib.util as util
+
 
 class DummySignal:
     def __init__(self, *args, **kwargs):
@@ -50,22 +49,20 @@ def setup_pyside(monkeypatch):
 
 def test_scrap_variant_worker_run(monkeypatch, tmp_path):
     setup_pyside(monkeypatch)
-    spec = util.spec_from_file_location(
-        "interface_py", Path(__file__).resolve().parents[1] / "interface_py.py"
-    )
-    ip = util.module_from_spec(spec)
-    spec.loader.exec_module(ip)
-
+    gw = __import__("gui.workers", fromlist=["dummy"])
     calls = []
+
     def fake_extract(url):
         calls.append(("extract", url))
         return "title", {"v": "img"}
+
     def fake_save(title, mapping, path):
         calls.append(("save", title, mapping, path))
-    monkeypatch.setattr(ip.moteur_variante, "extract_variants_with_images", fake_extract)
-    monkeypatch.setattr(ip.moteur_variante, "save_images_to_file", fake_save)
 
-    worker = ip.ScrapVariantWorker("http://ex", "sel", tmp_path / "o.txt")
+    monkeypatch.setattr(gw.moteur_variante, "extract_variants_with_images", fake_extract)
+    monkeypatch.setattr(gw.moteur_variante, "save_images_to_file", fake_save)
+
+    worker = gw.ScrapVariantWorker("http://ex", "sel", tmp_path / "o.txt")
     worker.run()
 
     assert calls == [

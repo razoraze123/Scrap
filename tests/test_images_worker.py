@@ -1,7 +1,6 @@
 import types
 import sys
-from pathlib import Path
-import importlib.util as util
+
 
 class DummySignal:
     def __init__(self, *args, **kwargs):
@@ -50,13 +49,9 @@ def setup_pyside(monkeypatch):
 
 def test_worker_parallel(monkeypatch, tmp_path):
     setup_pyside(monkeypatch)
-    spec = util.spec_from_file_location(
-        "interface_py", Path(__file__).resolve().parents[1] / "interface_py.py"
-    )
-    ip = util.module_from_spec(spec)
-    spec.loader.exec_module(ip)
-
+    gw = __import__("gui.workers", fromlist=["dummy"])
     calls = []
+
     def fake_download(url, **kwargs):
         cb = kwargs["progress_callback"]
         cb(1, 2)
@@ -64,9 +59,8 @@ def test_worker_parallel(monkeypatch, tmp_path):
         calls.append(url)
         return {"folder": tmp_path, "first_image": None}
 
-    monkeypatch.setattr(ip.scraper_images, "download_images", fake_download)
-
-    worker = ip.ScraperImagesWorker(
+    monkeypatch.setattr(gw.scraper_images, "download_images", fake_download)
+    worker = gw.ScraperImagesWorker(
         ["http://a", "http://b"],
         tmp_path,
         "img",
