@@ -1,5 +1,6 @@
 from importlib import util
 from pathlib import Path
+import threading
 
 spec = util.spec_from_file_location(
     "scraper_images",
@@ -25,7 +26,7 @@ class ElementURL:
 
 def test_handle_image_base64(tmp_path):
     elem = ElementBase64()
-    path, url = si._handle_image(elem, tmp_path, 1, "UA")
+    path, url = si._handle_image(elem, tmp_path, 1, "UA", set())
     assert path.exists()
     assert url is None
     assert path.read_bytes() == b"hello"
@@ -33,7 +34,7 @@ def test_handle_image_base64(tmp_path):
 
 def test_handle_image_url(tmp_path):
     elem = ElementURL()
-    path, url = si._handle_image(elem, tmp_path, 1, "UA")
+    path, url = si._handle_image(elem, tmp_path, 1, "UA", set())
     assert not path.exists()
     assert url == "https://example.com/img/test.png?x=1"
     assert path.name == "test.png"
@@ -183,3 +184,32 @@ def test_download_images_same_names_on_repeat(tmp_path, monkeypatch):
     files2 = sorted(p.name for p in res2["folder"].iterdir())
 
     assert files1 == files2
+
+
+def test_download_images_consistent_parallel_runs(tmp_path, monkeypatch):
+    elem = ElementDataSrc()
+
+    monkeypatch.setattr(si, "WebDriverWait", DummyWait)
+    monkeypatch.setattr(si, "EC", DummyEC)
+    monkeypatch.setattr("driver_utils.setup_driver", lambda: DummyDriver([elem]))
+    monkeypatch.setattr(si, "setup_driver", lambda: DummyDriver([elem]))
+    monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
+    monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
+
+    results = []
+
+    def worker(dest):
+        res = si.download_images(
+            "http://example.com",
+            css_selector="img",
+            parent_dir=dest,
+            use_alt_json=False,
+        )
+        results.append(sorted(p.name for p in res["folder"].iterdir()))
+
+    t1 = threading.Thread(target=worker, args=(tmp_path / "a",))
+    t2 = threading.Thread(target=worker, args=(tmp_path / "b",))
+    t1.start(); t2.start(); t1.join(); t2.join()
+
+    assert len(results) == 2
+    assert results[0] == results[1]
