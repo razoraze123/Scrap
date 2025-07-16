@@ -136,13 +136,9 @@ def setup_pyside(monkeypatch):
 
 def load_module(monkeypatch):
     setup_pyside(monkeypatch)
-    spec = util.spec_from_file_location(
-        "generateur_lien",
-        Path(__file__).resolve().parents[1] / "generateur_lien.py",
-    )
-    mod = util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    import importlib
+
+    return importlib.import_module("interface_py.link_generator")
 
 
 def test_generate_links(tmp_path, monkeypatch):

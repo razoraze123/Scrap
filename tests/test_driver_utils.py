@@ -1,7 +1,7 @@
 import importlib
 from pathlib import Path
 
-import driver_utils
+import interface_py.driver_utils as driver_utils
 
 class DummyOptions:
     def __init__(self):

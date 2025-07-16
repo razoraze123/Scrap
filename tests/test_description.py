@@ -1,12 +1,6 @@
-from importlib import util
-from pathlib import Path
+import importlib
 
-spec = util.spec_from_file_location(
-    "scrap_description_produit",
-    Path(__file__).resolve().parents[1] / "scrap_description_produit.py",
-)
-sdp = util.module_from_spec(spec)
-spec.loader.exec_module(sdp)
+sdp = importlib.import_module("interface_py.scrap_description")
 
 
 class DummyElement:
@@ -42,7 +36,7 @@ class DummyEC:
 def test_extract_html_description(monkeypatch):
     monkeypatch.setattr(sdp, "WebDriverWait", DummyWait)
     monkeypatch.setattr(sdp, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: DummyDriver())
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: DummyDriver())
     monkeypatch.setattr(sdp, "setup_driver", lambda: DummyDriver())
 
     html = sdp.extract_html_description("https://example.com", "div")

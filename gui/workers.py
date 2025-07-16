@@ -10,11 +10,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from PySide6.QtCore import QThread, Signal
 
 from .utils import QtLogHandler
-from scrap_lien_collection import scrape_collection, DEFAULT_NEXT_SELECTOR as SLC_DEFAULT_NEXT_SELECTOR
-import scraper_images
-from scrap_description_produit import scrape_description
-from scrap_prix_produit import scrape_price
-import moteur_variante
+from interface_py.scrap_collection import (
+    scrape_collection,
+    DEFAULT_NEXT_SELECTOR as SLC_DEFAULT_NEXT_SELECTOR,
+)
+from interface_py import scraper_images
+from interface_py.scrap_description import scrape_description
+from interface_py.scrap_price import scrape_price
+from interface_py import moteur_variante
 
 class ScrapLienWorker(QThread):
     log = Signal(str)
