@@ -308,6 +308,51 @@ class Alpha2Widget(QWidget):
         return f"{domain}/wp-content/uploads/{date_path}/{filename}"
 
 
+class MaintenancePage(QWidget):
+    """Simple page to update the project from GitHub."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.addStretch()
+
+        title = QLabel("Paramètres – Maintenance du projet")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        self.button_update = QPushButton("\U0001F501 Mettre à jour depuis GitHub")
+        self.button_update.clicked.connect(self.update_from_github)
+        layout.addWidget(self.button_update, alignment=Qt.AlignCenter)
+
+        layout.addStretch()
+
+    def update_from_github(self) -> None:
+        """Run git pull and show the result to the user."""
+        try:
+            result = subprocess.run(
+                ["git", "pull", "origin", "main"],
+                capture_output=True,
+                text=True,
+            )
+        except Exception as exc:  # pragma: no cover - unexpected error
+            QMessageBox.critical(
+                self,
+                "Mise à jour",
+                f"❌ Échec de mise à jour\n{exc}",
+            )
+            return
+
+        if result.returncode == 0:
+            QMessageBox.information(self, "Mise à jour", "✅ Mise à jour réussie")
+        else:
+            msg = result.stderr.strip() or result.stdout.strip()
+            QMessageBox.critical(
+                self,
+                "Mise à jour",
+                f"❌ Échec de mise à jour\n{msg}",
+            )
+
+
 
 class MainWindow(QMainWindow):
     def __init__(self, settings: SettingsManager):
@@ -328,6 +373,7 @@ class MainWindow(QMainWindow):
             "Moteur Variante",
             "Alpha",
             "Alpha 2",
+            "Préférences",
             "Paramètres",
         ]
 
@@ -342,6 +388,7 @@ class MainWindow(QMainWindow):
             "alpha.svg",
             "alpha.svg",
             "settings.svg",
+            "settings.svg",
         ]
         self.icon_paths = [ICONS_DIR / name for name in icon_names]
 
@@ -350,16 +397,30 @@ class MainWindow(QMainWindow):
         side_layout.setContentsMargins(0, 0, 0, 0)
 
         self.side_buttons: list[QToolButton] = []
-        for i, (text, icon) in enumerate(zip(labels, self.icon_paths)):
+        for i, (text, icon) in enumerate(zip(labels[:-1], self.icon_paths[:-1])):
             section = CollapsibleSection(
-    ToggleSwitch,
+                ToggleSwitch,
                 text,
                 QIcon(str(icon)),
                 lambda checked=False, i=i: self.show_page(i),
             )
             side_layout.addWidget(section)
             self.side_buttons.append(section.header)
+
         side_layout.addStretch()
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        side_layout.addWidget(separator)
+
+        bottom_index = len(labels) - 1
+        section = CollapsibleSection(
+            ToggleSwitch,
+            labels[-1],
+            QIcon(str(self.icon_paths[-1])),
+            lambda checked=False, i=bottom_index: self.show_page(i),
+        )
+        side_layout.addWidget(section)
+        self.side_buttons.append(section.header)
 
         for btn in self.side_buttons:
             btn.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
@@ -393,6 +454,7 @@ class MainWindow(QMainWindow):
         self.page_alpha = AlphaEngine()
         self.page_alpha2 = Alpha2Widget(settings)
         self.page_settings = PageSettings(settings, self.apply_settings)
+        self.page_maintenance = MaintenancePage()
         self.stack.addWidget(self.page_profiles)
         self.stack.addWidget(self.page_scrap)
         self.stack.addWidget(self.page_images)
@@ -403,6 +465,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page_alpha)
         self.stack.addWidget(self.page_alpha2)
         self.stack.addWidget(self.page_settings)
+        self.stack.addWidget(self.page_maintenance)
 
         self.page_images.input_source.editingFinished.connect(
             lambda: self.profile_manager.detect_and_apply(
