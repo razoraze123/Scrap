@@ -32,6 +32,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from tqdm import tqdm
 
 from interface_py.driver_utils import setup_driver
+from settings_manager import SettingsManager, DEFAULT_SETTINGS
 
 DEFAULT_CSS_SELECTOR = ".product-gallery__media-list img"
 
@@ -257,16 +258,10 @@ def download_images(
 ) -> dict:
     """Download all images from *url* and return folder and first image."""
     reserved_paths: set[Path] = set()
+    manager = SettingsManager()
     if user_agent is None:
-        try:
-            path = Path("settings.json")
-            if path.is_file():
-                data = json.loads(path.read_text(encoding="utf-8"))
-                user_agent = data.get("user_agent", USER_AGENT)
-            else:
-                user_agent = USER_AGENT
-        except Exception:
-            user_agent = USER_AGENT
+        user_agent = manager.settings.get("user_agent", DEFAULT_SETTINGS["user_agent"])
+
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
 

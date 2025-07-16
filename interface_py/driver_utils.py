@@ -7,24 +7,35 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from pathlib import Path
-import json
+
+from settings_manager import SettingsManager, DEFAULT_SETTINGS
 
 
-def setup_driver(headless: bool | None = None, driver_path: str | None = None) -> webdriver.Chrome:
+def setup_driver(
+    headless: bool | None = None,
+    driver_path: str | None = None,
+    *,
+    settings: SettingsManager | None = None,
+) -> webdriver.Chrome:
     """Return a configured Chrome WebDriver.
 
     Parameters
     ----------
     headless: bool | None
         Run Chrome in headless mode if True. If ``None``, the value is
-        loaded from the settings file and defaults to ``True``.
+        loaded from ``settings`` and defaults to ``True``.
     driver_path: optional str
         Path to a ChromeDriver binary to use. If absent or invalid,
         ``webdriver_manager`` is used to download a driver.
+    settings: SettingsManager | None
+        Optional settings manager used to retrieve ``headless`` and ``driver_path``
+        when not provided explicitly.
     """
-    driver_path = driver_path or _load_driver_path_from_settings()
+    settings = settings or SettingsManager()
+
+    driver_path = driver_path or settings.settings.get("driver_path")
     if headless is None:
-        headless = _load_headless_from_settings()
+        headless = settings.settings.get("headless", DEFAULT_SETTINGS["headless"])
 
     options = Options()
     if headless:
@@ -49,27 +60,13 @@ def setup_driver(headless: bool | None = None, driver_path: str | None = None) -
     return driver
 
 
-def _load_headless_from_settings() -> bool:
-    """Return headless flag from settings.json if available."""
-    settings_file = Path("settings.json")
-    if settings_file.is_file():
-        try:
-            data = json.loads(settings_file.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and "headless" in data:
-                return bool(data["headless"])
-        except Exception:
-            pass
-    return True
+def _load_headless_from_settings(manager: SettingsManager | None = None) -> bool:
+    """Return the ``headless`` setting using :class:`SettingsManager`."""
+    manager = manager or SettingsManager()
+    return bool(manager.settings.get("headless", DEFAULT_SETTINGS["headless"]))
 
 
-def _load_driver_path_from_settings() -> str | None:
-    """Return driver path from settings.json if available."""
-    settings_file = Path("settings.json")
-    if settings_file.is_file():
-        try:
-            data = json.loads(settings_file.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return data.get("driver_path")
-        except Exception:
-            pass
-    return None
+def _load_driver_path_from_settings(manager: SettingsManager | None = None) -> str | None:
+    """Return ChromeDriver path using :class:`SettingsManager`."""
+    manager = manager or SettingsManager()
+    return manager.settings.get("driver_path")
