@@ -81,3 +81,9 @@ Avant:
 Apres:
 
 ![Apres](screenshots/after.svg)
+
+## Tableau de bord
+
+Achats
+
+Ventes
