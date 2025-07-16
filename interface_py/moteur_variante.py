@@ -13,11 +13,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from interface_py.driver_utils import setup_driver
+from interface_py.constants import VARIANT_DEFAULT_SELECTOR
 
-DEFAULT_SELECTOR = ".variant-picker__option-values span.sr-only"
 
-
-def extract_variants(url: str, selector: str = DEFAULT_SELECTOR) -> tuple[str, list[str]]:
+def extract_variants(url: str, selector: str = VARIANT_DEFAULT_SELECTOR) -> tuple[str, list[str]]:
     """Return product title and list of variants found on *url*."""
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
@@ -116,7 +115,10 @@ def main() -> None:
         "url", nargs="?", help="URL du produit (si absent, demande \u00e0 l'ex\u00e9cution)"
     )
     parser.add_argument(
-        "-s", "--selector", default=DEFAULT_SELECTOR, help="S\u00e9lecteur CSS des variantes"
+        "-s",
+        "--selector",
+        default=VARIANT_DEFAULT_SELECTOR,
+        help="S\u00e9lecteur CSS des variantes",
     )
     parser.add_argument(
         "-o", "--output", default="variants.txt", help="Fichier de sortie"

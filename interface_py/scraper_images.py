@@ -33,8 +33,10 @@ from tqdm import tqdm
 
 from interface_py.driver_utils import setup_driver
 from settings_manager import SettingsManager, DEFAULT_SETTINGS
-
-DEFAULT_CSS_SELECTOR = ".product-gallery__media-list img"
+from interface_py.constants import (
+    IMAGES_DEFAULT_SELECTOR as DEFAULT_CSS_SELECTOR,
+    USER_AGENT,
+)
 
 # Path to the JSON file containing product names and ALT sentences
 ALT_JSON_PATH = Path(__file__).with_name("product_sentences.json")
@@ -65,9 +67,6 @@ def _open_folder(path: Path) -> None:
             subprocess.Popen(["xdg-open", path])
     except Exception as exc:
         logger.warning("Impossible d'ouvrir le dossier %s : %s", path, exc)
-
-
-USER_AGENT = "ScrapImageBot/1.0"
 
 
 def _download_binary(url: str, path: Path, user_agent: str = USER_AGENT) -> None:

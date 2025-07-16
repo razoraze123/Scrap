@@ -43,12 +43,20 @@ from alpha_engine import AlphaEngine
 
 from .utils import (
     ICON_SIZE,
-    ICONS_DIR,
-    SIDEBAR_EXPANDED_WIDTH,
-    SIDEBAR_COLLAPSED_WIDTH,
     load_stylesheet,
     CollapsibleSection,
     ToggleSwitch,
+)
+from interface_py.constants import (
+    ICONS_DIR,
+    SIDEBAR_EXPANDED_WIDTH,
+    SIDEBAR_COLLAPSED_WIDTH,
+    COLLECTION_DEFAULT_SELECTOR as SLC_DEFAULT_SELECTOR,
+    DESCRIPTION_DEFAULT_SELECTOR as SDP_DEFAULT_SELECTOR,
+    PRICE_DEFAULT_SELECTOR as SPP_DEFAULT_SELECTOR,
+    VARIANT_DEFAULT_SELECTOR as MV_DEFAULT_SELECTOR,
+    IMAGES_DEFAULT_SELECTOR as DEFAULT_CSS_SELECTOR,
+    USER_AGENT,
 )
 from .workers import (
     ScrapLienWorker,
@@ -59,11 +67,6 @@ from .workers import (
     VariantFetchWorker,
 )
 
-from interface_py.scrap_collection import DEFAULT_SELECTOR as SLC_DEFAULT_SELECTOR
-from interface_py.scrap_description import DEFAULT_SELECTOR as SDP_DEFAULT_SELECTOR
-from interface_py.scrap_price import DEFAULT_SELECTOR as SPP_DEFAULT_SELECTOR
-from interface_py.moteur_variante import DEFAULT_SELECTOR as MV_DEFAULT_SELECTOR
-from interface_py.scraper_images import DEFAULT_CSS_SELECTOR, USER_AGENT
 
 class PageProfiles(QWidget):
     """Manage site profiles (selectors)."""

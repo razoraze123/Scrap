@@ -10,10 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from PySide6.QtCore import QThread, Signal
 
 from .utils import QtLogHandler
-from interface_py.scrap_collection import (
-    scrape_collection,
-    DEFAULT_NEXT_SELECTOR as SLC_DEFAULT_NEXT_SELECTOR,
-)
+from interface_py.scrap_collection import scrape_collection
+from interface_py.constants import DEFAULT_NEXT_SELECTOR as SLC_DEFAULT_NEXT_SELECTOR
 from interface_py import scraper_images
 from interface_py.scrap_description import scrape_description
 from interface_py.scrap_price import scrape_price

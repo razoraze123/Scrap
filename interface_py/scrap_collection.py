@@ -23,11 +23,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from interface_py.driver_utils import setup_driver
-
-# Default CSS selector used to locate product links in the collection page
-DEFAULT_SELECTOR = "div.product-card__info h3.product-card__title a"
-# Default CSS selector used to locate the "next page" button
-DEFAULT_NEXT_SELECTOR = "a[rel=\"next\"]"
+from interface_py.constants import (
+    COLLECTION_DEFAULT_SELECTOR,
+    DEFAULT_NEXT_SELECTOR,
+)
 
 
 
@@ -41,7 +40,7 @@ def _random_sleep(min_s: float = 1.0, max_s: float = 2.5) -> None:
 def scrape_collection(
     url: str,
     output_path: Path,
-    css_selector: str = DEFAULT_SELECTOR,
+    css_selector: str = COLLECTION_DEFAULT_SELECTOR,
     next_selector: str = DEFAULT_NEXT_SELECTOR,
     output_format: str = "txt",
 ) -> None:
@@ -145,7 +144,7 @@ def main() -> None:
     parser.add_argument(
         "-s",
         "--selector",
-        default=DEFAULT_SELECTOR,
+        default=COLLECTION_DEFAULT_SELECTOR,
         help="Selecteur CSS des liens produits (defaut: %(default)s)",
     )
     parser.add_argument(
