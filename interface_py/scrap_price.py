@@ -12,11 +12,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from interface_py.driver_utils import setup_driver
+from interface_py.constants import PRICE_DEFAULT_SELECTOR
 
-DEFAULT_SELECTOR = ".price"
 
-
-def extract_price(url: str, css_selector: str = DEFAULT_SELECTOR) -> str:
+def extract_price(url: str, css_selector: str = PRICE_DEFAULT_SELECTOR) -> str:
     """Return the text content of the element matching *css_selector* on *url*."""
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
@@ -60,7 +59,7 @@ def main() -> None:
     parser.add_argument(
         "-s",
         "--selector",
-        default=DEFAULT_SELECTOR,
+        default=PRICE_DEFAULT_SELECTOR,
         help="Sélecteur CSS du prix (defaut: %(default)s)",
     )
     parser.add_argument(

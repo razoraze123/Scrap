@@ -5,8 +5,10 @@ from .utils import (
     QtLogHandler,
     ToggleSwitch,
     CollapsibleSection,
-    ICONS_DIR,
     ICON_SIZE,
+)
+from interface_py.constants import (
+    ICONS_DIR,
     SIDEBAR_EXPANDED_WIDTH,
     SIDEBAR_COLLAPSED_WIDTH,
 )

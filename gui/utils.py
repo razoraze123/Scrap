@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from interface_py.constants import (
+    ICONS_DIR,
+    SIDEBAR_EXPANDED_WIDTH,
+    SIDEBAR_COLLAPSED_WIDTH,
+)
 
 try:
     from PySide6.QtWidgets import (
@@ -46,12 +51,8 @@ except Exception:  # pragma: no cover - fallback for tests
             pass
 
 
-ICONS_DIR = Path(__file__).resolve().parents[1] / "icons"
-
 # Sidebar sizing constants
 ICON_SIZE = 24
-SIDEBAR_EXPANDED_WIDTH = 180
-SIDEBAR_COLLAPSED_WIDTH = ICON_SIZE + 16
 
 
 def load_stylesheet(path: str = "style.qss") -> None:

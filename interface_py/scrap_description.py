@@ -12,13 +12,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from interface_py.driver_utils import setup_driver
-
-DEFAULT_SELECTOR = ".rte"
-
+from interface_py.constants import DESCRIPTION_DEFAULT_SELECTOR
 
 
 
-def extract_html_description(url: str, css_selector: str = DEFAULT_SELECTOR) -> str:
+
+def extract_html_description(url: str, css_selector: str = DESCRIPTION_DEFAULT_SELECTOR) -> str:
     """Return the inner HTML of the first element matching *css_selector* on *url*."""
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("URL must start with http:// or https://")
@@ -62,7 +61,7 @@ def main() -> None:
     parser.add_argument(
         "-s",
         "--selector",
-        default=DEFAULT_SELECTOR,
+        default=DESCRIPTION_DEFAULT_SELECTOR,
         help="Sélecteur CSS de la description (defaut: %(default)s)",
     )
     parser.add_argument(
