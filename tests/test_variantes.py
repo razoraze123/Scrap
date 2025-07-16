@@ -1,9 +1,7 @@
 from pathlib import Path
-import importlib.util as util
+import importlib
 
-spec = util.spec_from_file_location("moteur_variante", Path(__file__).resolve().parents[1] / "moteur_variante.py")
-mv = util.module_from_spec(spec)
-spec.loader.exec_module(mv)
+mv = importlib.import_module("interface_py.moteur_variante")
 
 class DummyElem:
     def __init__(self, text="v1"):
@@ -36,7 +34,7 @@ class DummyEC:
 def test_extract_variants(monkeypatch):
     monkeypatch.setattr(mv, "WebDriverWait", DummyWait)
     monkeypatch.setattr(mv, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: DummyDriver())
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: DummyDriver())
     monkeypatch.setattr(mv, "setup_driver", lambda: DummyDriver())
 
     title, variants = mv.extract_variants("https://example.com")
@@ -123,7 +121,7 @@ def test_extract_variants_with_images(monkeypatch):
     driver = DummyDriverImages()
     monkeypatch.setattr(mv, "WebDriverWait", DummyWait2)
     monkeypatch.setattr(mv, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: driver)
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: driver)
     monkeypatch.setattr(mv, "setup_driver", lambda: driver)
     monkeypatch.setattr(mv.time, "sleep", lambda x: None)
 

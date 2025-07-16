@@ -1,13 +1,8 @@
-from importlib import util
+import importlib
 from pathlib import Path
 import threading
 
-spec = util.spec_from_file_location(
-    "scraper_images",
-    Path(__file__).resolve().parents[1] / "scraper_images.py",
-)
-si = util.module_from_spec(spec)
-spec.loader.exec_module(si)
+si = importlib.import_module("interface_py.scraper_images")
 
 
 class ElementBase64:
@@ -81,7 +76,7 @@ def test_download_images_datasrc_progress(tmp_path, monkeypatch):
 
     monkeypatch.setattr(si, "WebDriverWait", DummyWait)
     monkeypatch.setattr(si, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: driver)
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: driver)
     monkeypatch.setattr(si, "setup_driver", lambda: driver)
     monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
 
@@ -111,7 +106,7 @@ def test_download_images_parallel(tmp_path, monkeypatch):
 
     monkeypatch.setattr(si, "WebDriverWait", DummyWait)
     monkeypatch.setattr(si, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: driver)
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: driver)
     monkeypatch.setattr(si, "setup_driver", lambda: driver)
     monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
 
@@ -161,7 +156,7 @@ def test_download_images_no_alt_when_empty_path(tmp_path, monkeypatch):
 
     monkeypatch.setattr(si, "WebDriverWait", DummyWait)
     monkeypatch.setattr(si, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: driver)
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: driver)
     monkeypatch.setattr(si, "setup_driver", lambda: driver)
     monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
     monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
@@ -191,7 +186,7 @@ def test_download_images_same_names_on_repeat(tmp_path, monkeypatch):
 
     monkeypatch.setattr(si, "WebDriverWait", DummyWait)
     monkeypatch.setattr(si, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: DummyDriver([elem]))
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: DummyDriver([elem]))
     monkeypatch.setattr(si, "setup_driver", lambda: DummyDriver([elem]))
     monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
     monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
@@ -223,7 +218,7 @@ def test_download_images_consistent_parallel_runs(tmp_path, monkeypatch):
 
     monkeypatch.setattr(si, "WebDriverWait", DummyWait)
     monkeypatch.setattr(si, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: DummyDriver([elem]))
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: DummyDriver([elem]))
     monkeypatch.setattr(si, "setup_driver", lambda: DummyDriver([elem]))
     monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
     monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))

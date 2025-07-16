@@ -39,7 +39,7 @@ class Worker(QObject):
         finally:
             self.finished.emit()
 
-import moteur_variante
+from interface_py import moteur_variante
 
 
 class AlphaEngine(QWidget):

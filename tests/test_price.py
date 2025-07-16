@@ -1,12 +1,6 @@
-import importlib.util as util
-from pathlib import Path
+import importlib
 
-spec = util.spec_from_file_location(
-    "scrap_prix_produit",
-    Path(__file__).resolve().parents[1] / "scrap_prix_produit.py",
-)
-sp = util.module_from_spec(spec)
-spec.loader.exec_module(sp)
+sp = importlib.import_module("interface_py.scrap_price")
 
 
 class DummyElement:
@@ -42,7 +36,7 @@ class DummyEC:
 def test_extract_price(monkeypatch):
     monkeypatch.setattr(sp, "WebDriverWait", DummyWait)
     monkeypatch.setattr(sp, "EC", DummyEC)
-    monkeypatch.setattr("driver_utils.setup_driver", lambda: DummyDriver())
+    monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: DummyDriver())
     monkeypatch.setattr(sp, "setup_driver", lambda: DummyDriver())
 
     price = sp.extract_price("https://example.com", "span")

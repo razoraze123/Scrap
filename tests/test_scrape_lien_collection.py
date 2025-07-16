@@ -1,13 +1,7 @@
-import importlib.util as util
-from pathlib import Path
+import importlib
 import json
 
-spec = util.spec_from_file_location(
-    "scrap_lien_collection",
-    Path(__file__).resolve().parents[1] / "scrap_lien_collection.py",
-)
-slc = util.module_from_spec(spec)
-spec.loader.exec_module(slc)
+slc = importlib.import_module("interface_py.scrap_collection")
 
 
 class DummyElement:

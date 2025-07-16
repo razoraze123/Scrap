@@ -59,11 +59,11 @@ from .workers import (
     VariantFetchWorker,
 )
 
-from scrap_lien_collection import DEFAULT_SELECTOR as SLC_DEFAULT_SELECTOR
-from scrap_description_produit import DEFAULT_SELECTOR as SDP_DEFAULT_SELECTOR
-from scrap_prix_produit import DEFAULT_SELECTOR as SPP_DEFAULT_SELECTOR
-from moteur_variante import DEFAULT_SELECTOR as MV_DEFAULT_SELECTOR
-from scraper_images import DEFAULT_CSS_SELECTOR, USER_AGENT
+from interface_py.scrap_collection import DEFAULT_SELECTOR as SLC_DEFAULT_SELECTOR
+from interface_py.scrap_description import DEFAULT_SELECTOR as SDP_DEFAULT_SELECTOR
+from interface_py.scrap_price import DEFAULT_SELECTOR as SPP_DEFAULT_SELECTOR
+from interface_py.moteur_variante import DEFAULT_SELECTOR as MV_DEFAULT_SELECTOR
+from interface_py.scraper_images import DEFAULT_CSS_SELECTOR, USER_AGENT
 
 class PageProfiles(QWidget):
     """Manage site profiles (selectors)."""
