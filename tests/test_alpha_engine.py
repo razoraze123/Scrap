@@ -87,6 +87,7 @@ def setup_pyside(monkeypatch):
         "QLineEdit": DummyLineEdit,
         "QPushButton": DummyButton,
         "QTextEdit": DummyTextEdit,
+        "QPlainTextEdit": DummyTextEdit,
         "QMessageBox": DummyMessageBox,
         "QFileDialog": DummyFileDialog,
     }.items():
@@ -99,6 +100,8 @@ def setup_pyside(monkeypatch):
 
         def start(self):
             self.started.emit()
+            if hasattr(self, "run"):
+                self.run()
 
         def quit(self):
             self.finished.emit()
@@ -152,6 +155,8 @@ def test_start_analysis_success(monkeypatch):
         return "Title", {"Red": "https://a/red.jpg", "Blue": "https://a/blue.png"}
 
     monkeypatch.setattr(mod.moteur_variante, "extract_variants_with_images", fake_extract)
+    gw = __import__("gui.workers", fromlist=["dummy"])
+    monkeypatch.setattr(gw.moteur_variante, "extract_variants_with_images", fake_extract)
 
     eng = mod.AlphaEngine()
     eng.input_url.setText("http://ex")
@@ -188,6 +193,8 @@ def test_start_analysis_error(monkeypatch):
 
     monkeypatch.setattr(mod.moteur_variante, "extract_variants_with_images", fake_extract)
 
+    gw = __import__("gui.workers", fromlist=["dummy"])
+    monkeypatch.setattr(gw.moteur_variante, "extract_variants_with_images", fake_extract)
     eng = mod.AlphaEngine()
     eng.input_url.setText("http://ex")
     mod.QMessageBox.last.clear()

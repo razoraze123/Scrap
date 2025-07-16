@@ -14,30 +14,10 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QFileDialog,
 )
-from PySide6.QtCore import Qt, QObject, QThread, Signal
+from PySide6.QtCore import Qt
 
 
-class Worker(QObject):
-    """Background worker fetching variants and images."""
-
-    finished = Signal()
-    result_ready = Signal(str, dict)
-    error = Signal(str)
-
-    def __init__(self, url: str) -> None:
-        super().__init__()
-        self.url = url
-
-    def run(self) -> None:
-        try:
-            title, variants = moteur_variante.extract_variants_with_images(self.url)
-        except Exception as exc:  # noqa: BLE001
-            logging.exception("Worker run failed")
-            self.error.emit(str(exc))
-        else:
-            self.result_ready.emit(title, variants)
-        finally:
-            self.finished.emit()
+from gui.workers import VariantFetchWorker
 
 from interface_py import moteur_variante
 
@@ -102,17 +82,11 @@ class AlphaEngine(QWidget):
         self.result_view.clear()
         self.result_view.append("Analyse en cours...")
 
-        self._thread = QThread(self)
-        self._worker = Worker(url)
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.result_ready.connect(self._display_result)
-        self._worker.error.connect(self._show_error)
-        self._worker.finished.connect(self._thread.quit)
-        self._worker.finished.connect(self._worker.deleteLater)
-        self._thread.finished.connect(self._thread.deleteLater)
-        self._thread.finished.connect(self._analysis_finished)
-        self._thread.start()
+        self._worker = VariantFetchWorker(url)
+        self._worker.result.connect(self._display_result)
+        self._worker.log.connect(self._handle_log)
+        self._worker.finished.connect(self._analysis_finished)
+        self._worker.start()
 
     def _display_result(self, title: str, variants: dict) -> None:
         domain = self.input_domain.text().strip()
@@ -127,6 +101,10 @@ class AlphaEngine(QWidget):
             self._export_rows.append(
                 {"Product": title, "Variant": name, "Image": wp_url}
             )
+
+    def _handle_log(self, msg: str) -> None:
+        if msg.startswith("ERROR:"):
+            self._show_error(msg.split(":", 1)[1].strip())
 
     def _show_error(self, msg: str) -> None:
         QMessageBox.critical(self, "Erreur", msg)
