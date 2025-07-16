@@ -3,6 +3,8 @@ from pathlib import Path
 import threading
 
 si = importlib.import_module("interface_py.scraper_images")
+dh = importlib.import_module("interface_py.download_helpers")
+ru = importlib.import_module("interface_py.rename_helpers")
 
 
 class ElementBase64:
@@ -21,7 +23,7 @@ class ElementURL:
 
 def test_handle_image_base64(tmp_path):
     elem = ElementBase64()
-    path, url = si._handle_image(elem, tmp_path, 1, "UA", set())
+    path, url = dh.handle_image(elem, tmp_path, 1, "UA", set())
     assert path.exists()
     assert url is None
     assert path.read_bytes() == b"hello"
@@ -29,7 +31,7 @@ def test_handle_image_base64(tmp_path):
 
 def test_handle_image_url(tmp_path):
     elem = ElementURL()
-    path, url = si._handle_image(elem, tmp_path, 1, "UA", set())
+    path, url = dh.handle_image(elem, tmp_path, 1, "UA", set())
     assert not path.exists()
     assert url == "https://example.com/img/test.png?x=1"
     assert path.name == "test.png"
@@ -83,7 +85,7 @@ def test_download_images_datasrc_progress(tmp_path, monkeypatch):
     def fake_download(url, dest, ua):
         dest.write_bytes(b"img")
 
-    monkeypatch.setattr(si, "_download_binary", fake_download)
+    monkeypatch.setattr(dh, "download_binary", fake_download)
 
     calls = []
 
@@ -113,7 +115,7 @@ def test_download_images_parallel(tmp_path, monkeypatch):
     def fake_download(url, dest, ua):
         dest.write_bytes(b"img")
 
-    monkeypatch.setattr(si, "_download_binary", fake_download)
+    monkeypatch.setattr(dh, "download_binary", fake_download)
 
     calls = []
 
@@ -140,11 +142,11 @@ def test_load_alt_sentences_cache(tmp_path, monkeypatch):
         calls.append(1)
         return {}
 
-    monkeypatch.setattr(si.json, "load", fake_load)
-    si._ALT_SENTENCES_CACHE.clear()
+    monkeypatch.setattr(ru.json, "load", fake_load)
+    ru._ALT_SENTENCES_CACHE.clear()
 
-    si._load_alt_sentences(path)
-    si._load_alt_sentences(path)
+    ru.load_alt_sentences(path)
+    ru.load_alt_sentences(path)
 
     assert calls == [1]
 
@@ -159,12 +161,12 @@ def test_download_images_no_alt_when_empty_path(tmp_path, monkeypatch):
     monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: driver)
     monkeypatch.setattr(si, "setup_driver", lambda: driver)
     monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
-    monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
+    monkeypatch.setattr(dh, "download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
 
     load_calls = []
-    monkeypatch.setattr(si, "_load_alt_sentences", lambda p: load_calls.append(p) or {})
+    monkeypatch.setattr(ru, "load_alt_sentences", lambda p: load_calls.append(p) or {})
     rename_calls = []
-    monkeypatch.setattr(si, "_rename_with_alt", lambda *a, **k: rename_calls.append(a) or a[0])
+    monkeypatch.setattr(ru, "rename_with_alt", lambda *a, **k: rename_calls.append(a) or a[0])
 
     res = si.download_images(
         "http://example.com",
@@ -189,7 +191,7 @@ def test_download_images_same_names_on_repeat(tmp_path, monkeypatch):
     monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: DummyDriver([elem]))
     monkeypatch.setattr(si, "setup_driver", lambda: DummyDriver([elem]))
     monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
-    monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
+    monkeypatch.setattr(dh, "download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
 
     res1 = si.download_images(
         "http://example.com",
@@ -221,7 +223,7 @@ def test_download_images_consistent_parallel_runs(tmp_path, monkeypatch):
     monkeypatch.setattr("interface_py.driver_utils.setup_driver", lambda: DummyDriver([elem]))
     monkeypatch.setattr(si, "setup_driver", lambda: DummyDriver([elem]))
     monkeypatch.setattr(si, "_find_product_name", lambda d: "prod")
-    monkeypatch.setattr(si, "_download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
+    monkeypatch.setattr(dh, "download_binary", lambda url, dest, ua: dest.write_bytes(b"img"))
 
     results = []
 

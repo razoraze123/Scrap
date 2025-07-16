@@ -1,34 +1,21 @@
 #!/usr/bin/env python3
-"""Simple tool to download product images from a WooCommerce page.
-
-The script loads a product page in a headless Chrome browser, grabs all
-matching image tags and stores them locally. Base64 encoded images and
-regular image URLs are both supported. The output folder is created
-based on the cleaned product name.
-"""
+"""Utilities to download product images from a WooCommerce page."""
 
 from __future__ import annotations
 
-import base64
-import binascii
 import logging
 import os
 import re
-import sys
 import subprocess
-import json
-import random
-import unicodedata
-from pathlib import Path
-from typing import Iterable, Callable, Optional
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import argparse
+from pathlib import Path
+from typing import Callable, Optional
 
-import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 from tqdm import tqdm
 
 from interface_py.driver_utils import setup_driver
@@ -37,19 +24,14 @@ from interface_py.constants import (
     IMAGES_DEFAULT_SELECTOR as DEFAULT_CSS_SELECTOR,
     USER_AGENT,
 )
-
-# Path to the JSON file containing product names and ALT sentences
-ALT_JSON_PATH = Path(__file__).with_name("product_sentences.json")
-
-# Enable use of ALT sentences for renaming images by default
-USE_ALT_JSON = True
-
+from . import download_helpers as dl_helpers
+from . import rename_helpers
 
 logger = logging.getLogger(__name__)
 
 
 def _safe_folder(product_name: str, base_dir: Path | str = "images") -> Path:
-    """Return a Path object for the folder where images will be saved."""
+    """Return a Path where images will be saved."""
     safe_name = re.sub(r"[^\w\-]", "_", product_name)
     folder = Path(base_dir) / safe_name
     folder.mkdir(parents=True, exist_ok=True)
@@ -65,182 +47,27 @@ def _open_folder(path: Path) -> None:
             subprocess.Popen(["open", path])
         else:
             subprocess.Popen(["xdg-open", path])
-    except Exception as exc:
+    except Exception as exc:  # pragma: no cover - platform dependent
         logger.warning("Impossible d'ouvrir le dossier %s : %s", path, exc)
 
 
-def _download_binary(url: str, path: Path, user_agent: str = USER_AGENT) -> None:
-    """Download binary content from *url* into *path* using *user_agent*."""
-    headers = {"User-Agent": user_agent}
-    try:
-        with requests.get(url, headers=headers, stream=True, timeout=10) as resp:
-            resp.raise_for_status()
-            with path.open("wb") as fh:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if chunk:
-                        fh.write(chunk)
-    except requests.exceptions.RequestException as exc:
-        raise RuntimeError(f"Failed to download {url}") from exc
-
-
-def _save_base64(encoded: str, path: Path) -> None:
-    try:
-        data = base64.b64decode(encoded)
-    except binascii.Error as exc:
-        raise RuntimeError("Invalid base64 image data") from exc
-    path.write_bytes(data)
-
-
-def _unique_path(folder: Path, filename: str, reserved: set[Path]) -> Path:
-    """Return a unique ``Path`` in *folder* for *filename*.
-
-    If a file with the same name already exists, ``_n`` is appended before the
-    extension where ``n`` increments until an unused name is found. The
-    ``reserved`` set keeps track of paths generated during a single run to avoid
-    collisions when downloads occur concurrently.
-    """
-
-    base, ext = os.path.splitext(filename)
-    candidate = folder / filename
-    counter = 1
-    while candidate.exists() or candidate in reserved:
-        candidate = folder / f"{base}_{counter}{ext}"
-        counter += 1
-    reserved.add(candidate)
-    return candidate
-
-
-# Cache for the ALT sentences loaded from JSON
-_ALT_SENTENCES_CACHE: dict[Path, dict] = {}
-
-
-def _load_alt_sentences(path: Path = ALT_JSON_PATH) -> dict:
-    """Load and return the ALT sentences mapping from *path*.
-
-    The file is read only the first time for a given *path* and the result
-    is cached for subsequent calls. If reading fails, an empty dictionary is
-    cached and returned.
-    """
-    global _ALT_SENTENCES_CACHE
-
-    path = Path(path)
-    cached = _ALT_SENTENCES_CACHE.get(path)
-    if cached is not None:
-        return cached
-
-    try:
-        with path.open("r", encoding="utf-8") as fh:
-            data = json.load(fh)
-    except Exception as exc:
-        logger.warning("Impossible de charger %s : %s", path, exc)
-        data = {}
-
-    _ALT_SENTENCES_CACHE[path] = data
-    return data
-
-
-def _clean_filename(text: str) -> str:
-    """Return *text* transformed into a safe file name."""
-    normalized = unicodedata.normalize("NFD", text)
-    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
-    ascii_text = ascii_text.lower()
-    ascii_text = re.sub(r"\s+", "_", ascii_text)
-    ascii_text = re.sub(r"[^a-z0-9_-]", "", ascii_text)
-    return ascii_text
-
-
-def _rename_with_alt(
-    path: Path, sentences: dict, warned: set[str], reserved: set[Path]
-) -> Path:
-    """Rename *path* using ALT sentences if available."""
-
-    product_key = path.parent.name.replace("_", " ")
-    phrase_list = sentences.get(product_key)
-    if not phrase_list:
-        if product_key not in warned:
-            logger.warning(
-                "Cle '%s' absente de product_sentences.json, pas de renommage", product_key
-            )
-            warned.add(product_key)
-        return path
-
-    alt_phrase = random.choice(phrase_list)
-    filename = _clean_filename(alt_phrase) + path.suffix
-    target = path.parent / filename
-    if target != path and target.exists():
-        target = _unique_path(path.parent, filename, reserved)
-    try:
-        path.rename(target)
-    except OSError as exc:
-        logger.warning("Echec du renommage %s -> %s : %s", path, target, exc)
-        return path
-    return target
-
-
-def _handle_image(
-    element, folder: Path, index: int, user_agent: str, reserved: set[Path]
-) -> tuple[Path, str | None]:
-    src = (
-        element.get_attribute("src")
-        or element.get_attribute("data-src")
-        or element.get_attribute("data-srcset")
-    )
-
-    if not src:
-        raise RuntimeError("Aucun attribut src / data-src trouvé pour l'image")
-
-    if " " in src and "," in src:
-        candidates = [s.strip().split(" ")[0] for s in src.split(",")]
-        src = candidates[-1]
-
-    logger.debug(f"Téléchargement de l'image : {src}")
-
-    if src.startswith("data:image"):
-        header, encoded = src.split(",", 1)
-        ext = header.split("/")[1].split(";")[0]
-        filename = f"image_base64_{index}.{ext}"
-        target = _unique_path(folder, filename, reserved)
-        _save_base64(encoded, target)
-        return target, None
-
-    if src.startswith("//"):
-        src = "https:" + src
-
-    raw_filename = os.path.basename(src.split("?")[0])
-    filename = re.sub(r"-\d+(?=\.\w+$)", "", raw_filename)
-    target = _unique_path(folder, filename, reserved)
-    return target, src
-
-
 def _find_product_name(driver: webdriver.Chrome) -> str:
-    """Return the product name found in the page.
-
-    The function checks, in order, for a ``<meta property="og:title">`` tag,
-    the page ``<title>`` element and finally the first ``<h1>`` element. If none
-    of these elements provide a non-empty value, ``"produit_woo"`` is returned.
-    """
-
+    """Return the product name found in the page."""
     selectors = [
         (By.CSS_SELECTOR, "meta[property='og:title']", "content"),
         (By.TAG_NAME, "title", None),
         (By.TAG_NAME, "h1", None),
     ]
-
     for by, value, attr in selectors:
         try:
             elem = driver.find_element(by, value)
-            text = (
-                elem.get_attribute(attr)
-                if attr
-                else getattr(elem, "text", "")
-            )
+            text = elem.get_attribute(attr) if attr else getattr(elem, "text", "")
             if text:
                 text = text.strip()
             if text:
                 return text
         except Exception:
             continue
-
     return "produit_woo"
 
 
@@ -250,7 +77,7 @@ def download_images(
     parent_dir: Path | str = "images",
     progress_callback: Optional[Callable[[int, int], None]] = None,
     user_agent: str | None = None,
-    use_alt_json: bool = USE_ALT_JSON,
+    use_alt_json: bool = rename_helpers.USE_ALT_JSON,
     *,
     alt_json_path: str | Path | None = None,
     max_threads: int = 4,
@@ -273,7 +100,7 @@ def download_images(
     skipped = 0
 
     if use_alt_json and alt_json_path:
-        sentences = _load_alt_sentences(Path(alt_json_path))
+        sentences = rename_helpers.load_alt_sentences(Path(alt_json_path))
     else:
         sentences = {}
         use_alt_json = False
@@ -303,7 +130,7 @@ def download_images(
         with ThreadPoolExecutor(max_workers=max_threads) as executor:
             for idx, img in enumerate(img_elements, start=1):
                 try:
-                    path, url_to_download = _handle_image(
+                    path, url_to_download = dl_helpers.handle_image(
                         img, folder, idx, user_agent, reserved_paths
                     )
                     WebDriverWait(driver, 5).until(
@@ -313,7 +140,7 @@ def download_images(
                     )
                     if url_to_download is None:
                         if use_alt_json:
-                            path = _rename_with_alt(
+                            path = rename_helpers.rename_with_alt(
                                 path, sentences, warned_missing, reserved_paths
                             )
                         downloaded += 1
@@ -323,22 +150,27 @@ def download_images(
                         if progress_callback:
                             progress_callback(idx, total)
                     else:
-                        fut = executor.submit(_download_binary, url_to_download, path, user_agent)
+                        fut = executor.submit(
+                            dl_helpers.download_binary,
+                            url_to_download,
+                            path,
+                            user_agent,
+                        )
                         futures[fut] = (idx, path)
-                except Exception as exc:
+                except Exception as exc:  # pragma: no cover - unexpected
                     logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
             for fut in as_completed(futures):
                 idx, path = futures[fut]
                 try:
                     fut.result()
                     if use_alt_json:
-                        path = _rename_with_alt(
+                        path = rename_helpers.rename_with_alt(
                             path, sentences, warned_missing, reserved_paths
                         )
                     downloaded += 1
                     if first_image is None:
                         first_image = path
-                except Exception as exc:
+                except Exception as exc:  # pragma: no cover - download failure
                     logger.error("\u274c Erreur pour l'image %s : %s", idx, exc)
                     skipped += 1
                 pbar_update(1)
@@ -356,147 +188,3 @@ def download_images(
     logger.info("-" * 50)
 
     return {"folder": folder, "first_image": first_image}
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Télécharger toutes les images d'un produit WooCommerce."
-    )
-    parser.add_argument(
-        "url",
-        nargs="?",
-        help="URL du produit (si absent, demande à l'exécution)",
-    )
-    parser.add_argument(
-        "-s",
-        "--selector",
-        default=DEFAULT_CSS_SELECTOR,
-        help="Sélecteur CSS des images (defaut: %(default)s)",
-    )
-    parser.add_argument(
-        "-d",
-        "--dest",
-        "--parent-dir",
-        dest="parent_dir",
-        default="images",
-        help="Dossier parent des images (defaut: %(default)s)",
-    )
-    parser.add_argument(
-        "--urls",
-        help="Fichier contenant une liste d'URLs (une par ligne)",
-    )
-    parser.add_argument(
-        "--preview",
-        action="store_true",
-        help="Ouvrir le dossier des images après téléchargement",
-    )
-    parser.add_argument(
-        "--user-agent",
-        default=USER_AGENT,
-        help="User-Agent à utiliser pour les requêtes (defaut: %(default)s)",
-    )
-    parser.add_argument(
-        "--use-alt-json",
-        dest="use_alt_json",
-        action="store_true" if not USE_ALT_JSON else "store_false",
-        help=(
-            "Activer" if not USE_ALT_JSON else "Désactiver"
-        )
-        + " le renommage via product_sentences.json",
-    )
-    parser.add_argument(
-        "--alt-json-path",
-        default=str(ALT_JSON_PATH),
-        help="Chemin du fichier JSON pour le renommage (defaut: %(default)s)",
-    )
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Niveau de logging (defaut: %(default)s)",
-    )
-    parser.add_argument(
-        "--max-threads",
-        type=int,
-        default=4,
-        help="Nombre maximal de threads pour les telechargements"
-        " (defaut: %(default)s)",
-    )
-    parser.add_argument(
-        "--jobs",
-        type=int,
-        default=1,
-        help="Nombre maximal de pages a traiter en parallele (defaut: %(default)s)",
-    )
-    parser.set_defaults(use_alt_json=USE_ALT_JSON)
-    args = parser.parse_args()
-
-    if not args.alt_json_path:
-        args.alt_json_path = None
-
-    if args.url and args.urls:
-        parser.error("--url et --urls sont mutuellement exclusifs")
-
-    urls_list = []
-    if args.urls:
-        try:
-            with open(args.urls, "r", encoding="utf-8") as fh:
-                urls_list = [line.strip() for line in fh if line.strip()]
-        except OSError as exc:
-            parser.error(f"Impossible de lire le fichier {args.urls}: {exc}")
-
-    if not urls_list:
-        if not args.url:
-            args.url = input("\U0001F517 Entrez l'URL du produit WooCommerce : ").strip()
-        urls_list = [args.url]
-
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format="%(levelname)s: %(message)s",
-    )
-
-    if args.jobs > 1 and len(urls_list) > 1:
-        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-            futures = {
-                executor.submit(
-                    download_images,
-                    url,
-                    css_selector=args.selector,
-                    parent_dir=args.parent_dir,
-                    user_agent=args.user_agent,
-                    use_alt_json=args.use_alt_json,
-                    alt_json_path=args.alt_json_path,
-                    max_threads=args.max_threads,
-                ): url
-                for url in urls_list
-            }
-            for fut in as_completed(futures):
-                try:
-                    info = fut.result()
-                    if args.preview:
-                        _open_folder(info["folder"])
-                except ValueError as exc:
-                    logger.error("Erreur : %s", exc)
-    else:
-        for url in urls_list:
-            try:
-                info = download_images(
-                    url,
-                    css_selector=args.selector,
-                    parent_dir=args.parent_dir,
-                    user_agent=args.user_agent,
-                    use_alt_json=args.use_alt_json,
-                    alt_json_path=args.alt_json_path,
-                    max_threads=args.max_threads,
-                )
-                if args.preview:
-                    _open_folder(info["folder"])
-            except ValueError as exc:
-                logger.error("Erreur : %s", exc)
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        logger.info("\nInterruption par l'utilisateur.")
