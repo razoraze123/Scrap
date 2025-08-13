@@ -31,3 +31,12 @@ d'URLs. Le calcul de la barre de progression a été revu pour prendre en compte
 plusieurs produits et l'événement `progress` est à présent émis quelle que soit la
 quantité d'URLs.
 
+Audit des fonctionnalités de mise à jour Git
+============================================
+
+Les fonctions `update_from_github` (gui/main_window.py) et `update_and_restart` (interface_py/ui/page_settings.py) exécutent un `git pull` direct sur la branche `main`. Elles gèrent les erreurs de base, mais plusieurs améliorations sont possibles :
+
+1. Vérifier les modifications locales avant de lancer la commande pour éviter les conflits.
+2. Exécuter la commande dans un thread séparé pour ne pas bloquer l'interface.
+3. Rendre la branche et le remote configurables.
+4. Fournir davantage de détails et d'instructions en cas d'échec.
